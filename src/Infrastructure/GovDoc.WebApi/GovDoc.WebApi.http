@@ -1,0 +1,6 @@
+@GovDoc.WebApi_HostAddress = http://localhost:5218
+
+GET {{GovDoc.WebApi_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

@@ -1,0 +1,28 @@
+# Build and temp directories
+bin/
+obj/
+out/
+dist/
+node_modules/
+.vs/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Logs and storage
+*.log
+StorageFiles/
+storage/
+scratch/
+TestResults/
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.DS_Store
+Thumbs.db
