@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
 using GovDoc.Application.Common.Interfaces;
@@ -14,6 +15,18 @@ namespace GovDoc.Infrastructure.Services
 {
     public class OcrService : IOcrService
     {
+        static OcrService()
+        {
+            try
+            {
+                Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+            }
+            catch
+            {
+                // Fallback nếu đã được đăng ký
+            }
+        }
+
         public async Task<OcrExtractionResult> ExtractDocumentTextAsync(Stream fileStream, string fileName)
         {
             var result = new OcrExtractionResult();
@@ -48,6 +61,10 @@ namespace GovDoc.Infrastructure.Services
                         rawText = await reader.ReadToEndAsync();
                     }
                 }
+                else if (ext == ".doc")
+                {
+                    rawText = ExtractTextFromDoc(fileStream);
+                }
                 else if (ext == ".txt")
                 {
                     using var reader = new StreamReader(fileStream, Encoding.UTF8, leaveOpen: true);
@@ -61,29 +78,47 @@ namespace GovDoc.Infrastructure.Services
                     rawText = Encoding.UTF8.GetString(buffer);
                 }
             }
-            catch
+            catch (Exception ex)
             {
                 rawText = string.Empty;
+                result.ExtractionNote = $"Lỗi đọc tệp: {ex.Message}";
             }
 
-            // Nếu trích xuất được nội dung thật có nghĩa
-            if (!string.IsNullOrWhiteSpace(rawText) && rawText.Any(char.IsLetterOrDigit))
+            // 1. Tự động chuyển đổi TCVN3 sang Unicode nếu phát hiện font cũ (ABC, .VnTime,...)
+            if (!string.IsNullOrWhiteSpace(rawText))
+            {
+                rawText = VietnameseFontConverter.ConvertTcvn3ToUnicode(rawText);
+            }
+
+            // 2. Kiểm tra tính toàn vẹn, lỗi font, mã hóa nhị phân
+            var (isCorrupted, corruptReason) = VietnameseFontConverter.DetectCorruptionOrEncodingError(rawText);
+            if (isCorrupted)
+            {
+                result.HasFontOrEncodingError = true;
+                result.ExtractionNote = corruptReason;
+            }
+
+            // 3. Phân loại và trích xuất thực thể
+            if (!string.IsNullOrWhiteSpace(rawText) && rawText.Any(char.IsLetterOrDigit) && !result.HasFontOrEncodingError)
             {
                 ParseAdministrativeCues(rawText, result, fileName);
             }
             else
             {
-                // Xử lý tệp thực tế chưa có lớp chữ số OCR (không tự động điền bừa số văn bản)
+                // Xử lý tệp bị lỗi font / không đọc được / hình ảnh scan chưa có lớp text
                 result.DetectedIssuer = "Chưa nhận diện";
                 result.DetectedCodeNumber = "Chưa có số";
                 result.DetectedIssuedDate = DateTime.Now.Date;
                 result.DetectedUrgency = "THƯỜNG";
                 result.CalculatedSlaDeadline = CalculateBusinessSla(5);
                 result.SubjectTitle = $"Tiếp nhận tài liệu: {fileName}";
-                result.CoreProblem = "Tệp công văn dạng scan/hình ảnh chưa nhận dạng được lớp văn bản điện tử.";
+                result.CoreProblem = string.IsNullOrWhiteSpace(result.ExtractionNote)
+                    ? "Tệp công văn dạng scan/hình ảnh chưa nhận dạng được lớp văn bản điện tử."
+                    : result.ExtractionNote;
                 result.SubmittedBasis = "Tệp công văn thực tế tải lên từ người dùng.";
-                result.RequestedAction = "Yêu cầu cung cấp bản số hóa có lớp văn bản điện tử để thẩm định.";
-                result.ExtractedText = string.Empty;
+                result.RequestedAction = "Yêu cầu cung cấp tệp định dạng chuẩn Unicode (UTF-8) hoặc văn bản rõ nét.";
+                result.ExtractedText = rawText ?? string.Empty;
+                result.DocumentCategory = "KHONG_XAC_DINH";
             }
 
             return result;
@@ -97,17 +132,55 @@ namespace GovDoc.Infrastructure.Services
                 using var document = PdfDocument.Open(stream);
                 foreach (var page in document.GetPages())
                 {
-                    var pageText = page.Text;
-                    if (!string.IsNullOrWhiteSpace(pageText))
+                    var words = page.GetWords()?.ToList();
+                    if (words != null && words.Count > 0)
                     {
-                        sb.AppendLine(pageText);
+                        // Sắp xếp và gom nhóm các từ thành từng dòng dựa trên tọa độ Y và X
+                        // Trong PDF, tọa độ Y gốc từ đáy trang, nên Y lớn hơn là ở phía trên
+                        var lines = new List<List<UglyToad.PdfPig.Content.Word>>();
+                        var sortedWords = words.OrderByDescending(w => w.BoundingBox.Bottom).ThenBy(w => w.BoundingBox.Left).ToList();
+
+                        foreach (var word in sortedWords)
+                        {
+                            var matchedLine = lines.FirstOrDefault(l =>
+                            {
+                                var refWord = l[0];
+                                var yDiff = Math.Abs(refWord.BoundingBox.Bottom - word.BoundingBox.Bottom);
+                                var avgHeight = (refWord.BoundingBox.Height + word.BoundingBox.Height) / 2.0;
+                                return yDiff <= Math.Max(3.0, avgHeight * 0.5);
+                            });
+
+                            if (matchedLine != null)
+                            {
+                                matchedLine.Add(word);
+                            }
+                            else
+                            {
+                                lines.Add(new List<UglyToad.PdfPig.Content.Word> { word });
+                            }
+                        }
+
+                        // Sắp xếp các dòng từ trên xuống dưới
+                        var orderedLines = lines
+                            .OrderByDescending(l => l.Average(w => w.BoundingBox.Bottom))
+                            .ToList();
+
+                        foreach (var line in orderedLines)
+                        {
+                            var lineWords = line.OrderBy(w => w.BoundingBox.Left).Select(w => w.Text);
+                            var lineStr = string.Join(" ", lineWords).Trim();
+                            if (!string.IsNullOrWhiteSpace(lineStr))
+                            {
+                                sb.AppendLine(lineStr);
+                            }
+                        }
                     }
                     else
                     {
-                        var words = page.GetWords();
-                        if (words != null && words.Any())
+                        var fallbackText = page.Text;
+                        if (!string.IsNullOrWhiteSpace(fallbackText))
                         {
-                            sb.AppendLine(string.Join(" ", words.Select(w => w.Text)));
+                            sb.AppendLine(fallbackText);
                         }
                     }
                 }
@@ -133,14 +206,7 @@ namespace GovDoc.Infrastructure.Services
                     {
                         if (headerPart.Header != null)
                         {
-                            foreach (var p in headerPart.Header.Descendants<Paragraph>())
-                            {
-                                var text = p.InnerText;
-                                if (!string.IsNullOrWhiteSpace(text))
-                                {
-                                    sb.AppendLine(text);
-                                }
-                            }
+                            ExtractElementsWithSpacing(headerPart.Header, sb);
                         }
                     }
                 }
@@ -149,14 +215,7 @@ namespace GovDoc.Infrastructure.Services
                 var body = wordDoc.MainDocumentPart?.Document?.Body;
                 if (body != null)
                 {
-                    foreach (var p in body.Descendants<Paragraph>())
-                    {
-                        var text = p.InnerText;
-                        if (!string.IsNullOrWhiteSpace(text))
-                        {
-                            sb.AppendLine(text);
-                        }
-                    }
+                    ExtractElementsWithSpacing(body, sb);
                 }
             }
             catch
@@ -166,11 +225,229 @@ namespace GovDoc.Infrastructure.Services
             return sb.ToString();
         }
 
+        private static string ExtractTextFromDoc(Stream stream)
+        {
+            var sb = new StringBuilder();
+            try
+            {
+                byte[] bytes;
+                using (var ms = new MemoryStream())
+                {
+                    if (stream.CanSeek) stream.Seek(0, SeekOrigin.Begin);
+                    stream.CopyTo(ms);
+                    bytes = ms.ToArray();
+                }
+
+                // 1. Quét tìm các chuỗi UTF-16LE liên tục (Word 97-2003 lưu văn bản tiếng Việt Unicode 16-bit)
+                var utf16Chars = new List<char>();
+                for (int i = 0; i < bytes.Length - 1; i += 2)
+                {
+                    ushort code = (ushort)(bytes[i] | (bytes[i + 1] << 8));
+                    // Chỉ nhận diện các ký tự thuộc bảng chữ cái Latin, Tiếng Việt, dấu câu, số (bỏ qua ký tự CJK/tiếng Trung nhị phân)
+                    bool isPrintable = (code >= 32 && code <= 0x024F) || // ASCII + Latin-1 + Latin Extended A/B
+                                       (code >= 0x1EA0 && code <= 0x1EF9) || // Vietnamese Unicode Precomposed
+                                       (code >= 0x2000 && code <= 0x206F) || // General Punctuation (quotes, dashes, ellipsis)
+                                       code == 9 || code == 10 || code == 13;
+
+                    if (isPrintable)
+                    {
+                        utf16Chars.Add((char)code);
+                    }
+                    else
+                    {
+                        if (utf16Chars.Count >= 4)
+                        {
+                            string segment = new string(utf16Chars.ToArray()).Trim();
+                            if (segment.Length >= 4 && segment.Any(char.IsLetterOrDigit))
+                            {
+                                sb.AppendLine(segment);
+                            }
+                        }
+                        utf16Chars.Clear();
+                    }
+                }
+                if (utf16Chars.Count >= 4)
+                {
+                    string segment = new string(utf16Chars.ToArray()).Trim();
+                    if (segment.Length >= 4 && segment.Any(char.IsLetterOrDigit))
+                    {
+                        sb.AppendLine(segment);
+                    }
+                }
+
+                string result = sb.ToString();
+
+                // 2. Nếu UTF-16LE không thu được văn bản có nghĩa (dưới 50 ký tự), thử quét 8-bit ANSI / TCVN3
+                if (result.Length < 50)
+                {
+                    var ansiSb = new StringBuilder();
+                    var byteRun = new List<byte>();
+                    for (int i = 0; i < bytes.Length; i++)
+                    {
+                        byte b = bytes[i];
+                        if ((b >= 32 && b <= 254) || b == 9 || b == 10 || b == 13)
+                        {
+                            byteRun.Add(b);
+                        }
+                        else
+                        {
+                            if (byteRun.Count >= 5)
+                            {
+                                string segment = Encoding.GetEncoding("windows-1258").GetString(byteRun.ToArray()).Trim();
+                                if (segment.Length >= 5 && segment.Any(char.IsLetterOrDigit))
+                                {
+                                    ansiSb.AppendLine(segment);
+                                }
+                            }
+                            byteRun.Clear();
+                        }
+                    }
+                    if (ansiSb.Length > result.Length)
+                    {
+                        result = ansiSb.ToString();
+                    }
+                }
+
+                return result;
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private static void ExtractElementsWithSpacing(OpenXmlElement container, StringBuilder sb)
+        {
+            foreach (var p in container.Descendants<Paragraph>())
+            {
+                var pSb = new StringBuilder();
+                foreach (var child in p.Elements())
+                {
+                    if (child is Run r)
+                    {
+                        // Bỏ qua các thành phần đồ họa / Shape / Drawing tránh rác tọa độ VML (center2921000)
+                        if (r.Elements<Drawing>().Any() || r.Elements().Any(e => e.LocalName == "pict" || e.LocalName == "shape"))
+                        {
+                            continue;
+                        }
+
+                        foreach (var runChild in r.Elements())
+                        {
+                            if (runChild is Text t)
+                            {
+                                string textVal = t.Text;
+                                if (!string.IsNullOrEmpty(textVal))
+                                {
+                                    if (pSb.Length > 0 &&
+                                        !char.IsWhiteSpace(pSb[pSb.Length - 1]) &&
+                                        !char.IsWhiteSpace(textVal[0]) &&
+                                        !IsPunctuationChar(textVal[0]) &&
+                                        !IsPunctuationChar(pSb[pSb.Length - 1]))
+                                    {
+                                        pSb.Append(" ");
+                                    }
+                                    pSb.Append(textVal);
+                                }
+                            }
+                            else if (runChild is TabChar)
+                            {
+                                pSb.Append("   ");
+                            }
+                            else if (runChild is Break)
+                            {
+                                pSb.Append("\n");
+                            }
+                        }
+                    }
+                    else if (child is Break)
+                    {
+                        pSb.Append("\n");
+                    }
+                }
+
+                var pText = pSb.ToString().Trim();
+                // Tuyệt đối không fallback gọi p.InnerText vì sẽ nuốt toàn bộ tọa độ vector vml
+                if (!string.IsNullOrWhiteSpace(pText) && !IsGarbageVmlLine(pText))
+                {
+                    sb.AppendLine(pText);
+                }
+            }
+        }
+
+        private static bool IsPunctuationChar(char c)
+        {
+            return c == '.' || c == ',' || c == ';' || c == ':' || c == '/' || c == '-' || c == ')' || c == ']' || c == '(' || c == '[';
+        }
+
+        private static bool IsGarbageVmlLine(string text)
+        {
+            return Regex.IsMatch(text, @"^(?:center\d+|stroke\w*|from\d+|to\d+|strokecolor|fillcolor)", RegexOptions.IgnoreCase);
+        }
+
+        public static string NormalizeAdministrativeText(string raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
+
+            // 1. Chuẩn hóa xuống dòng và ký tự khoảng trắng đặc biệt (NBSP, zero-width space)
+            raw = raw.Replace("\r\n", "\n").Replace('\r', '\n');
+            raw = raw.Replace('\u00A0', ' ').Replace('\u200B', ' ');
+
+            // 2. Nối từ bị ngắt dòng bởi dấu gạch nối (ví dụ: "nghiệp-\nvụ" -> "nghiệp vụ", "xây-\ndựng" -> "xây dựng")
+            raw = Regex.Replace(raw, @"(\p{L}+)\s*-\s*\n\s*(\p{L}+)", "$1 $2");
+
+            // 3. Đảm bảo có ngắt nghỉ giữa các chữ: thêm khoảng trắng sau các dấu ngắt câu (, ; :) nếu bị dính chữ
+            raw = Regex.Replace(raw, @"(?<=[a-zA-ZÀ-ỹĐđ])([,;:])(?=[a-zA-ZÀ-ỹĐđ0-9])", "$1 ");
+            // Thêm khoảng trắng sau dấu chấm nếu theo sau là chữ cái tiếng Việt (tránh số thập phân và chữ số)
+            raw = Regex.Replace(raw, @"(?<=[a-zA-ZÀ-ỹĐđ])(\.)(?=[a-zA-ZÀ-ỹĐđ])", "$1 ");
+
+            // 4. Chuẩn hóa khoảng trắng trong mỗi dòng
+            var lines = raw.Split('\n');
+            var cleanedLines = new List<string>();
+            foreach (var line in lines)
+            {
+                var cleaned = Regex.Replace(line, @"[ \t]+", " ").Trim();
+                cleanedLines.Add(cleaned);
+            }
+
+            // 5. Gộp các dòng rỗng liên tiếp
+            var result = string.Join("\n", cleanedLines);
+            result = Regex.Replace(result, @"\n{3,}", "\n\n");
+            return result.Trim();
+        }
+
         private static void ParseAdministrativeCues(string raw, OcrExtractionResult result, string fileName)
         {
-            result.ExtractedText = raw.Trim();
+            raw = NormalizeAdministrativeText(raw);
+            result.ExtractedText = raw;
 
-            // 1. Nhận diện Mức độ khẩn & Tính hạn SLA
+            string headerArea = raw.Length > 1500 ? raw.Substring(0, 1500) : raw;
+            string headerUpper = headerArea.ToUpperInvariant();
+
+            // 1. Phân loại Loại hình văn bản dựa trên Tiêu đề / Phần đầu văn bản
+            if (headerUpper.Contains("GIẤY ĐỀ NGHỊ ĐĂNG KÝ DOANH NGHIỆP") ||
+                headerUpper.Contains("ĐĂNG KÝ DOANH NGHIỆP") ||
+                headerUpper.Contains("ĐĂNG KÝ HOẠT ĐỘNG"))
+            {
+                result.DocumentCategory = "DANG_KY_DOANH_NGHIEP";
+            }
+            else if (headerUpper.Contains("CHỦ SỞ HỮU HƯỞNG LỢI") || headerUpper.Contains("HƯỞNG LỢI"))
+            {
+                result.DocumentCategory = "KE_KHAI_CAM_KET";
+            }
+            else if (headerUpper.Contains("GIẤY ỦY QUYỀN") || headerUpper.Contains("HỢP ĐỒNG ỦY QUYỀN") || headerUpper.Contains("GIẤY UỶ QUYỀN") || headerUpper.Contains("ỦY QUYỀN") || headerUpper.Contains("UỶ QUYỀN"))
+            {
+                result.DocumentCategory = "GIAY_UY_QUYEN";
+            }
+            else if (headerUpper.Contains("ĐƠN KHIẾU NẠI") || headerUpper.Contains("ĐƠN TỐ CÁO") || headerUpper.Contains("ĐƠN KIẾN NGHỊ") || headerUpper.Contains("ĐƠN ĐỀ NGHỊ"))
+            {
+                result.DocumentCategory = "DON_THU";
+            }
+            else
+            {
+                result.DocumentCategory = "CONG_VAN_HANH_CHINH";
+            }
+
+            // 2. Nhận diện Mức độ khẩn & Tính hạn SLA
             if (raw.Contains("HỎA TỐC", StringComparison.OrdinalIgnoreCase))
             {
                 result.DetectedUrgency = "HỎA TỐC";
@@ -187,22 +464,18 @@ namespace GovDoc.Infrastructure.Services
                 result.CalculatedSlaDeadline = CalculateBusinessSla(5);
             }
 
-            // 2. Nhận diện Số ký hiệu văn bản (theo chuẩn thể thức Nghị định 30/2020/NĐ-CP)
-            result.DetectedCodeNumber = ExtractCodeNumber(raw);
-
-            // 3. Nhận diện Cơ quan ban hành
-            var issuerMatch = Regex.Match(raw, @"((?:ỦY BAN NHÂN DÂN|SỞ|BỘ|VĂN PHÒNG|BAN QUẢN LÝ|CÔNG TY)[^\r\n,;]+)", RegexOptions.IgnoreCase);
-            if (issuerMatch.Success)
+            // 3. Nhận diện Số ký hiệu văn bản (chỉ áp dụng cho công văn / quyết định)
+            if (result.DocumentCategory == "CONG_VAN_HANH_CHINH")
             {
-                result.DetectedIssuer = CleanIssuer(issuerMatch.Groups[1].Value);
+                result.DetectedCodeNumber = ExtractCodeNumber(raw);
             }
             else
             {
-                result.DetectedIssuer = "Cơ quan hành chính nhà nước";
+                result.DetectedCodeNumber = "Chưa có số";
             }
 
-            // 4. Nhận diện Ngày tháng năm ban hành
-            var dateMatch = Regex.Match(raw, @"ngày\s+([0-9]{1,2})\s+tháng\s+([0-9]{1,2})\s+năm\s+([0-9]{4})", RegexOptions.IgnoreCase);
+            // 4. Nhận diện Ngày tháng năm
+            var dateMatch = Regex.Match(raw, @"(?:ngày|ngay)\s+([0-9]{1,2})\s+tháng\s+([0-9]{1,2})\s+năm\s+([0-9]{4})", RegexOptions.IgnoreCase);
             if (dateMatch.Success &&
                 int.TryParse(dateMatch.Groups[1].Value, out int d) &&
                 int.TryParse(dateMatch.Groups[2].Value, out int m) &&
@@ -222,23 +495,107 @@ namespace GovDoc.Infrastructure.Services
                 result.DetectedIssuedDate = DateTime.Now.Date;
             }
 
-            // 5. Nhận diện Trích yếu nội dung (V/v...)
-            var subjectMatch = Regex.Match(raw, @"(V/v|về việc|N/v|V/V)\s*([^\r\n]+)", RegexOptions.IgnoreCase);
-            if (subjectMatch.Success)
+            // 5. Trích xuất Chủ thể ban hành & Trích yếu theo từng loại hình văn bản
+            if (result.DocumentCategory == "GIAY_UY_QUYEN")
             {
-                result.SubjectTitle = subjectMatch.Groups[2].Value.Trim();
-            }
-            else
-            {
-                // Tìm dòng tiêu đề (như TỜ TRÌNH, BÁO CÁO, CÔNG VĂN)
-                var titleDocMatch = Regex.Match(raw, @"(TỜ TRÌNH|BÁO CÁO|CÔNG VĂN|ĐƠN KHIẾU NẠI)\s*([^\r\n]*)", RegexOptions.IgnoreCase);
-                if (titleDocMatch.Success)
+                result.SubjectTitle = "Giấy ủy quyền thực hiện thủ tục hành chính";
+                var authorizerMatch = Regex.Match(raw, @"(?:BÊN ỦY QUYỀN|NGƯỜI ỦY QUYỀN|Bên A|Tôi là|Họ và tên)[:\s]*([^\r\n,;]+)", RegexOptions.IgnoreCase);
+                if (authorizerMatch.Success)
                 {
-                    result.SubjectTitle = titleDocMatch.Value.Trim();
+                    result.DetectedIssuer = $"Bên ủy quyền: {authorizerMatch.Groups[1].Value.Trim()}";
                 }
                 else
                 {
-                    result.SubjectTitle = $"Xử lý văn bản {result.DetectedCodeNumber}";
+                    result.DetectedIssuer = "Người ủy quyền (Cá nhân / Tổ chức)";
+                }
+                result.RequestedAction = "Ủy quyền đại diện thực hiện nộp hồ sơ, tiếp nhận kết quả và các thủ tục liên quan.";
+                result.CoreProblem = "Ủy quyền cá nhân/tổ chức thực hiện thay mặt các thủ tục hành chính theo phạm vi ủy quyền.";
+            }
+            else if (result.DocumentCategory == "DANG_KY_DOANH_NGHIEP")
+            {
+                var compMatch = Regex.Match(raw, @"(?:Tên công ty viết bằng tiếng Việt|Tên doanh nghiệp)[:\s]*([^\r\n]+)", RegexOptions.IgnoreCase);
+                string compRaw = compMatch.Success ? compMatch.Groups[1].Value : string.Empty;
+                compRaw = Regex.Replace(compRaw, @"\((?:ghi bằng|viết bằng)[^\)]*\):?", "").Trim();
+
+                if (!string.IsNullOrWhiteSpace(compRaw) && !compRaw.Contains("……") && !compRaw.Contains("…") && compRaw.Length > 3)
+                {
+                    result.SubjectTitle = $"Đăng ký thành lập doanh nghiệp: {compRaw}";
+                    result.DetectedIssuer = compRaw;
+                }
+                else
+                {
+                    var directCompMatch = Regex.Match(raw, @"(CÔNG TY\s+(?:TNHH|CỔ PHẦN|HỢP DANH)[^\r\n\.]+)", RegexOptions.IgnoreCase);
+                    if (directCompMatch.Success && !directCompMatch.Groups[1].Value.Contains("……") && !directCompMatch.Groups[1].Value.Contains("…"))
+                    {
+                        string cName = directCompMatch.Groups[1].Value.Trim();
+                        result.SubjectTitle = $"Đăng ký thành lập: {cName}";
+                        result.DetectedIssuer = cName;
+                    }
+                    else
+                    {
+                        result.SubjectTitle = "Giấy đề nghị đăng ký doanh nghiệp";
+                        result.DetectedIssuer = "Người thành lập doanh nghiệp";
+                    }
+                }
+                result.RequestedAction = "Đăng ký thành lập doanh nghiệp mới và cấp Giấy chứng nhận đăng ký doanh nghiệp.";
+                result.CoreProblem = $"Đề nghị Phòng Đăng ký kinh doanh tiếp nhận và cấp Giấy chứng nhận đăng ký doanh nghiệp.";
+            }
+            else if (result.DocumentCategory == "KE_KHAI_CAM_KET")
+            {
+                result.SubjectTitle = "Kê khai và cam kết về chủ sở hữu hưởng lợi của doanh nghiệp";
+                var declarantMatch = Regex.Match(raw, @"(?:Họ và tên người kê khai|Người kê khai|Tôi là)[:\s]*([^\r\n,;]+)", RegexOptions.IgnoreCase);
+                if (declarantMatch.Success && !declarantMatch.Groups[1].Value.Contains("……") && !declarantMatch.Groups[1].Value.Contains("…") && declarantMatch.Groups[1].Value.Trim().Length > 2)
+                {
+                    result.DetectedIssuer = $"Người kê khai: {declarantMatch.Groups[1].Value.Trim()}";
+                }
+                else
+                {
+                    result.DetectedIssuer = "Người kê khai chủ sở hữu hưởng lợi";
+                }
+                result.RequestedAction = "Kê khai thông tin chủ sở hữu hưởng lợi theo quy định đăng ký doanh nghiệp.";
+                result.CoreProblem = "Kê khai danh tính và tỷ lệ lợi ích của chủ sở hữu hưởng lợi trong doanh nghiệp.";
+            }
+            else
+            {
+                // Công văn / Tờ trình hành chính
+                var issuerMatch = Regex.Match(headerArea, @"((?:ỦY BAN NHÂN DÂN|SỞ|BỘ|VĂN PHÒNG|BAN QUẢN LÝ|CÔNG TY)[^\r\n,;]+)", RegexOptions.IgnoreCase);
+                if (issuerMatch.Success)
+                {
+                    result.DetectedIssuer = CleanIssuer(issuerMatch.Groups[1].Value);
+                }
+                else
+                {
+                    result.DetectedIssuer = "Cơ quan hành chính nhà nước";
+                }
+
+                var subjectMatch = Regex.Match(headerArea, @"(?:V/v|về việc|N/v|V/V)\s*([^\r\n]+)", RegexOptions.IgnoreCase);
+                if (subjectMatch.Success)
+                {
+                    result.SubjectTitle = subjectMatch.Groups[1].Value.Trim();
+                }
+                else
+                {
+                    var titleDocMatch = Regex.Match(headerArea, @"(TỜ TRÌNH|BÁO CÁO|CÔNG VĂN|ĐƠN KHIẾU NẠI)\s*([^\r\n]*)", RegexOptions.IgnoreCase);
+                    if (titleDocMatch.Success)
+                    {
+                        result.SubjectTitle = titleDocMatch.Value.Trim();
+                    }
+                    else
+                    {
+                        result.SubjectTitle = $"Xử lý văn bản {result.DetectedCodeNumber}";
+                    }
+                }
+
+                var requestMatches = Regex.Matches(raw, @"((?:kính đề nghị|đề nghị|xin gia hạn|xin chủ trương|khiếu nại|báo cáo xin ý kiến|đề xuất)[^\r\n\.]+)", RegexOptions.IgnoreCase);
+                if (requestMatches.Count > 0)
+                {
+                    result.RequestedAction = requestMatches[0].Value.Trim();
+                    result.CoreProblem = $"Đơn vị gửi văn bản về việc: {result.SubjectTitle}. Nội dung đề xuất: {result.RequestedAction}.";
+                }
+                else
+                {
+                    result.CoreProblem = $"Giải quyết nội dung: {result.SubjectTitle} do {result.DetectedIssuer} ban hành.";
+                    result.RequestedAction = $"Xem xét và ban hành văn bản phúc đáp theo thẩm quyền.";
                 }
             }
 
@@ -260,27 +617,13 @@ namespace GovDoc.Infrastructure.Services
                 ? string.Join("; ", bases)
                 : "Căn cứ theo văn bản đề nghị và hồ sơ thực địa gửi kèm.";
 
-            // 8. Nhận diện Vấn đề cốt lõi & Hành động đề nghị
-            var requestMatches = Regex.Matches(raw, @"((?:kính đề nghị|đề nghị|xin gia hạn|xin chủ trương|khiếu nại|báo cáo xin ý kiến|đề xuất)[^\r\n\.]+)", RegexOptions.IgnoreCase);
-            if (requestMatches.Count > 0)
-            {
-                result.RequestedAction = requestMatches[0].Value.Trim();
-                result.CoreProblem = $"Đơn vị gửi văn bản về việc: {result.SubjectTitle}. Nội dung đề xuất: {result.RequestedAction}.";
-            }
-            else
-            {
-                result.CoreProblem = $"Giải quyết nội dung: {result.SubjectTitle} do {result.DetectedIssuer} ban hành.";
-                result.RequestedAction = $"Xem xét và ban hành văn bản phúc đáp theo thẩm quyền.";
-            }
-
-            // 9. Nhận diện Người ký và Chức vụ (Thường nằm ở cuối văn bản, là dòng độc lập)
+            // 8. Nhận diện Người ký và Chức vụ (Thường nằm ở cuối văn bản)
             var signerMatches = Regex.Matches(raw, @"^\s*(?:KT\.\s*|TM\.\s*)?(?:CHỦ TỊCH|GIÁM ĐỐC|CHÁNH VĂN PHÒNG|PHÓ CHỦ TỊCH|PHÓ GIÁM ĐỐC|TRƯỞNG PHÒNG)\b[^\r\n]*$", RegexOptions.Multiline | RegexOptions.IgnoreCase);
             if (signerMatches.Count > 0)
             {
                 var signerMatch = signerMatches[signerMatches.Count - 1];
                 result.SignerTitle = signerMatch.Value.Trim();
 
-                // Lấy các dòng phía sau chức danh để nhận diện tên người ký
                 var remaining = raw.Substring(signerMatch.Index + signerMatch.Length);
                 var lines = remaining.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
                                      .Select(l => l.Trim())

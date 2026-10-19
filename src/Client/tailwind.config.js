@@ -5,6 +5,8 @@ export default {
     extend: {
       fontFamily: {
         sans: ['"Nunito Sans"', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif'],
+        mono: ['"Nunito Sans"', 'sans-serif'],
+        serif: ['"Nunito Sans"', 'sans-serif'],
       },
       colors: {
         gov: {

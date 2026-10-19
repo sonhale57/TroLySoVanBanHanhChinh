@@ -137,5 +137,168 @@ Tôi làm đơn này đề nghị cấp phép xây dựng theo quy định.";
             // Tuyệt đối không lấy tên tệp 'Don_De_Nghi_Xay_Dung_2026' và không lấy ngày tháng '15/10/2026'
             Assert.Equal("Chưa có số", result.DetectedCodeNumber);
         }
+
+        [Fact]
+        public void NormalizeAdministrativeText_SpacingAndHyphens_EnsuresCleanWordBoundaries()
+        {
+            // Input text with hyphenated line break and glued punctuation
+            string raw = "Công tác văn thư,lưu trữ điện tử.Sau đó tiến hành bóc tách.\nĐơn vị đang tập-\ntrung thực hiện nhiệm vụ.";
+
+            string normalized = OcrService.NormalizeAdministrativeText(raw);
+
+            // Assert
+            Assert.Contains("văn thư, lưu trữ", normalized);
+            Assert.Contains("điện tử. Sau đó", normalized);
+            Assert.Contains("tập trung", normalized); // hyphen across line break joined
+        }
+
+        [Fact]
+        public async Task AppraisalEngine_CorruptedOrUnreadableDocument_ReturnsRequireAdditionalInfo_NeverApproved()
+        {
+            // Arrange
+            var engine = new AdministrativeAppraisalEngine();
+            var ocrResult = new GovDoc.Application.Common.Interfaces.OcrExtractionResult
+            {
+                ExtractedText = "abc \0\0\0\0\0\0\0\0\0\0 \uFFFD\uFFFD\uFFFD",
+                HasFontOrEncodingError = true,
+                ExtractionNote = "Văn bản bị lỗi font chữ / lỗi mã hóa hoặc chứa dữ liệu nhị phân không đọc được."
+            };
+
+            // Act
+            var verdict = await engine.EvaluateDocumentAsync(ocrResult, new(), new());
+
+            // Assert
+            Assert.Equal("REQUIRE_ADDITIONAL_INFO", verdict.VerdictType);
+            Assert.Contains("LỖI ĐỊNH DẠNG / LỖI FONT", verdict.VerdictTitle);
+            Assert.NotEqual("APPROVED", verdict.VerdictType);
+        }
+
+        [Fact]
+        public async Task AppraisalEngine_IncompletePowerOfAttorney_ReturnsRequireAdditionalInfo_NeverApproved()
+        {
+            // Arrange
+            var engine = new AdministrativeAppraisalEngine();
+            var ocrResult = new GovDoc.Application.Common.Interfaces.OcrExtractionResult
+            {
+                DocumentCategory = "GIAY_UY_QUYEN",
+                SubjectTitle = "Giấy ủy quyền thực hiện thủ tục",
+                DetectedIssuer = "Bên ủy quyền (Cá nhân)",
+                DetectedCodeNumber = "Chưa có số",
+                ExtractedText = @"CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM
+Độc lập - Tự do - Hạnh phúc
+
+GIẤY ỦY QUYỀN
+Hôm nay, ngày …… tháng …… năm 20……
+Bên ủy quyền: Họ và tên: Nguyễn Văn A, CCCD số: ……
+Bên được ủy quyền: Họ và tên: ……
+Nội dung ủy quyền: ……"
+            };
+
+            // Act
+            var verdict = await engine.EvaluateDocumentAsync(ocrResult, new(), new());
+
+            // Assert
+            Assert.Equal("REQUIRE_ADDITIONAL_INFO", verdict.VerdictType);
+            Assert.Contains("HỒ SƠ ỦY QUYỀN CHƯA HOÀN THIỆN", verdict.VerdictTitle);
+            Assert.Contains("Bộ luật Dân sự 2015", verdict.StatutoryAuthority);
+            Assert.NotEmpty(verdict.MissingRequirements);
+            Assert.NotEqual("APPROVED", verdict.VerdictType);
+        }
+
+        [Fact]
+        public async Task AppraisalEngine_IncompleteBusinessRegistration_ReturnsRequireAdditionalInfo_NeverApproved()
+        {
+            // Arrange
+            var engine = new AdministrativeAppraisalEngine();
+            var ocrResult = new GovDoc.Application.Common.Interfaces.OcrExtractionResult
+            {
+                DocumentCategory = "DANG_KY_DOANH_NGHIEP",
+                SubjectTitle = "Giấy đề nghị đăng ký doanh nghiệp",
+                DetectedIssuer = "Người thành lập doanh nghiệp",
+                DetectedCodeNumber = "Chưa có số",
+                ExtractedText = @"CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM
+Độc lập - Tự do - Hạnh phúc
+
+GIẤY ĐỀ NGHỊ ĐĂNG KÝ DOANH NGHIỆP
+Kính gửi: Phòng Đăng ký kinh doanh
+1. Tên doanh nghiệp: CÔNG TY TNHH ……
+2. Địa chỉ trụ sở chính: ……
+3. Ngành, nghề kinh doanh: ……
+4. Vốn điều lệ: ……
+5. Người đại diện theo pháp luật: ……"
+            };
+
+            // Act
+            var verdict = await engine.EvaluateDocumentAsync(ocrResult, new(), new());
+
+            // Assert
+            Assert.Equal("REQUIRE_ADDITIONAL_INFO", verdict.VerdictType);
+            Assert.Contains("YÊU CẦU HOÀN THIỆN ĐƠN ĐĂNG KÝ DOANH NGHIỆP", verdict.VerdictTitle);
+            Assert.Contains("Luật Doanh nghiệp 2020", verdict.StatutoryAuthority);
+            Assert.NotEmpty(verdict.MissingRequirements);
+            Assert.NotEqual("APPROVED", verdict.VerdictType);
+        }
+
+        [Fact]
+        public async Task ProcessRealUploadedDocuments_ValidatesExtractionAndAppraisal()
+        {
+            var engine = new AdministrativeAppraisalEngine();
+            string incomingDir = Path.Combine(AppContext.BaseDirectory, "../../../../../src/Infrastructure/GovDoc.WebApi/bin/Debug/net8.0/StorageFiles/incoming");
+            if (!Directory.Exists(incomingDir))
+            {
+                // Fallback nếu chạy ở thư mục khác
+                return;
+            }
+
+            // 1. Kiểm tra file .doc: 552dde9bd36942d1a92116f17e1e4210.doc (3. CSH Huong loi.doc)
+            string docPath = Path.Combine(incomingDir, "552dde9bd36942d1a92116f17e1e4210.doc");
+            if (File.Exists(docPath))
+            {
+                using var fs = File.OpenRead(docPath);
+                var ocr = await _ocrService.ExtractDocumentTextAsync(fs, "3. CSH Huong loi.doc");
+                Assert.NotNull(ocr.ExtractedText);
+                Assert.True(ocr.ExtractedText.Length > 100);
+                Assert.Contains("CHỦ SỞ HỮU HƯỞNG LỢI", ocr.ExtractedText.ToUpperInvariant());
+                Assert.False(ocr.HasFontOrEncodingError);
+                Assert.Equal("KE_KHAI_CAM_KET", ocr.DocumentCategory);
+
+                var verdict = await engine.EvaluateDocumentAsync(ocr, new(), new());
+                // Văn bản kê khai còn dấu ... / …… nên phải là REQUIRE_ADDITIONAL_INFO hoặc APPROVED nếu đủ, tuyệt đối không duyệt nhầm thành công văn UBND
+                Assert.NotEqual("CONG_VAN_HANH_CHINH", ocr.DocumentCategory);
+            }
+
+            // 2. Kiểm tra file 53fd8fe0f3764856a2e85bc9c3c093e4.docx (4.Uy quyen.docx)
+            string uyQuyenPath = Path.Combine(incomingDir, "53fd8fe0f3764856a2e85bc9c3c093e4.docx");
+            if (File.Exists(uyQuyenPath))
+            {
+                using var fs = File.OpenRead(uyQuyenPath);
+                var ocr = await _ocrService.ExtractDocumentTextAsync(fs, "4.Uy quyen.docx");
+                Assert.NotNull(ocr.ExtractedText);
+                Assert.Equal("GIAY_UY_QUYEN", ocr.DocumentCategory);
+                Assert.False(ocr.HasFontOrEncodingError);
+                // Tuyệt đối không lấy "Sở Tài chính Tỉnh Lâm Đồng" làm DetectedIssuer cho giấy ủy quyền
+                Assert.DoesNotContain("Sở Tài chính", ocr.DetectedIssuer);
+
+                var verdict = await engine.EvaluateDocumentAsync(ocr, new(), new());
+                // Văn bản ủy quyền chưa điền thông tin / còn dấu …… phải trả về REQUIRE_ADDITIONAL_INFO, không được APPROVED
+                Assert.Equal("REQUIRE_ADDITIONAL_INFO", verdict.VerdictType);
+                Assert.Contains("HỒ SƠ ỦY QUYỀN CHƯA HOÀN THIỆN", verdict.VerdictTitle);
+            }
+
+            // 3. Kiểm tra file 3c8e4c97bada4b67af51a91dc5cb755c.docx (1.Dang ky.docx)
+            string dangKyPath = Path.Combine(incomingDir, "3c8e4c97bada4b67af51a91dc5cb755c.docx");
+            if (File.Exists(dangKyPath))
+            {
+                using var fs = File.OpenRead(dangKyPath);
+                var ocr = await _ocrService.ExtractDocumentTextAsync(fs, "1.Dang ky.docx");
+                Assert.NotNull(ocr.ExtractedText);
+                Assert.Equal("DANG_KY_DOANH_NGHIEP", ocr.DocumentCategory);
+                Assert.False(ocr.HasFontOrEncodingError);
+
+                var verdict = await engine.EvaluateDocumentAsync(ocr, new(), new());
+                // Giấy đăng ký thành lập doanh nghiệp
+                Assert.Contains("DOANH NGHIỆP", verdict.VerdictTitle);
+            }
+        }
     }
 }

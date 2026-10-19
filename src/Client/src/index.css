@@ -8,8 +8,11 @@
   --font-sans: 'Nunito Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
+*, html, body, button, input, select, textarea {
+  font-family: var(--font-sans) !important;
+}
+
 html, body {
-  font-family: var(--font-sans);
   background-color: #F4F6F9;
   color: #1C252E;
   margin: 0;
@@ -34,12 +37,12 @@ html, body {
   background: #919EAB;
 }
 
-/* A4 Sheet styling for Decree 30 Preview */
+/* A4 Sheet styling for Document Preview */
 .a4-sheet {
   width: 100%;
   max-width: 794px; /* A4 ratio at ~96 DPI */
   min-height: 1123px;
   background-color: #FFFFFF;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-  font-family: 'Times New Roman', Times, serif;
+  font-family: var(--font-sans) !important;
 }

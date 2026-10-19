@@ -61,7 +61,14 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
     }
   };
 
-  const handleDownloadDocx = async (supplementaryNotes: string) => {
+  const handleDownloadDocx = async (params: {
+    supplementaryNotes: string;
+    issuerParent: string;
+    issuerName: string;
+    location: string;
+    signerTitle: string;
+    signerName: string;
+  }) => {
     if (!processedData) return;
 
     try {
@@ -69,7 +76,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
       const verdict = processedData.appraisalVerdict;
       const incomingCode = processedData.documentInfo.codeNumber || 'CV';
       const cleanCode = incomingCode.replace(/[^a-zA-Z0-9]/g, '_');
-      const subjectTitle = processedData.documentInfo.subjectTitle 
+      const subjectTitle = processedData.documentInfo.subjectTitle
         ? `V/v phúc đáp văn bản ${incomingCode} về ${processedData.documentInfo.subjectTitle}`
         : `V/v phúc đáp văn bản số ${incomingCode}`;
       const recipientMain = processedData.documentInfo.issuer || 'Đơn vị gửi văn bản';
@@ -77,9 +84,9 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
       const customParagraphs = verdict?.draftContentBullets && verdict.draftContentBullets.length > 0
         ? verdict.draftContentBullets
         : (processedData.actionOptions[0]?.draftContentBullets || [
-            `Phúc đáp văn bản số ${incomingCode} của ${recipientMain}.`,
-            'Đề nghị cơ quan, đơn vị thực hiện theo đúng quy định pháp luật.'
-          ]);
+          `Phúc đáp văn bản số ${incomingCode} của ${recipientMain}.`,
+          'Đề nghị cơ quan, đơn vị thực hiện theo đúng quy định pháp luật.'
+        ]);
 
       const primaryBasis = verdict?.primaryLegalBasis || processedData.actionOptions[0]?.legalBasis;
 
@@ -87,14 +94,18 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
         taskId: processedData.taskId,
         selectedOptionId: verdict?.verdictType || 'OPT-01',
         subjectTitle,
-        supplementaryNotes,
+        supplementaryNotes: params.supplementaryNotes,
+        issuerParent: params.issuerParent,
+        issuerName: params.issuerName,
+        location: params.location,
+        signerTitle: params.signerTitle,
+        signerName: params.signerName,
         docCode: `PhucDap-${incomingCode}`,
         recipientMain,
         customLegalBases: [
           'Luật Tổ chức chính quyền địa phương ngày 19 tháng 6 năm 2015',
           'Luật Ban hành văn bản quy phạm pháp luật ngày 22 tháng 6 năm 2015',
           primaryBasis?.docTitle ? `${primaryBasis.docTitle} (${primaryBasis.docCode})` : 'Quy định pháp luật chuyên ngành hiện hành',
-          'Nghị định số 30/2020/NĐ-CP ngày 05 tháng 3 năm 2020 của Chính phủ về công tác văn thư',
         ],
         customParagraphs,
       });
@@ -108,7 +119,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
 
-      setNotification(`Đã xuất thành công tệp Word .docx chuẩn Nghị định 30 theo kết luận: ${verdict?.verdictTitle || 'Thẩm định'}!`);
+      setNotification(`Đã xuất thành công tệp Word .docx chuẩn thể thức văn bản hành chính theo kết luận: ${verdict?.verdictTitle || 'Thẩm định'}!`);
     } catch (err) {
       console.error(err);
       setNotification('Không thể kết nối đến máy chủ để tải file Word.');
@@ -191,40 +202,6 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
               <p className="text-xs text-gov-text-secondary mt-2 max-w-lg mx-auto leading-relaxed">
                 Vui lòng kéo thả hoặc chọn tệp công văn thực tế (Scan PDF, Vector PDF, Word .docx hoặc TXT) tại bảng tiếp nhận bên trái.
               </p>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-8 max-w-xl mx-auto text-left">
-                <div className="p-3.5 rounded-lg border border-gov-border/70 bg-gov-bg/50 flex items-start gap-2.5">
-                  <FileText className="w-4 h-4 text-gov-primary mt-0.5 flex-shrink-0" />
-                  <div>
-                    <h5 className="text-xs font-bold text-gov-text">Bóc tách Thể thức NĐ 30</h5>
-                    <p className="text-[11px] text-gov-text-secondary mt-0.5">Tự nhận diện Số hiệu, Cơ quan ban hành, Trích yếu và Người ký.</p>
-                  </div>
-                </div>
-
-                <div className="p-3.5 rounded-lg border border-gov-border/70 bg-gov-bg/50 flex items-start gap-2.5">
-                  <Clock className="w-4 h-4 text-gov-gold mt-0.5 flex-shrink-0" />
-                  <div>
-                    <h5 className="text-xs font-bold text-gov-text">Tính hạn SLA công vụ</h5>
-                    <p className="text-[11px] text-gov-text-secondary mt-0.5">Tự động cộng ngày làm việc loại trừ Thứ Bảy và Chủ Nhật.</p>
-                  </div>
-                </div>
-
-                <div className="p-3.5 rounded-lg border border-gov-border/70 bg-gov-bg/50 flex items-start gap-2.5">
-                  <ShieldCheck className="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <h5 className="text-xs font-bold text-gov-text">Thẩm định Tự động 4 Tầng</h5>
-                    <p className="text-[11px] text-gov-text-secondary mt-0.5">Tính toán Hướng giải quyết duy nhất đúng theo luật định, triệt tiêu lỗi chọn sai.</p>
-                  </div>
-                </div>
-
-                <div className="p-3.5 rounded-lg border border-gov-border/70 bg-gov-bg/50 flex items-start gap-2.5">
-                  <FileCheck className="w-4 h-4 text-gov-primary mt-0.5 flex-shrink-0" />
-                  <div>
-                    <h5 className="text-xs font-bold text-gov-text">Xuất Word .docx chuẩn lề mm</h5>
-                    <p className="text-[11px] text-gov-text-secondary mt-0.5">Sinh file Word phúc đáp chuẩn căn lề 20-20-30-15mm Nghị định 30.</p>
-                  </div>
-                </div>
-              </div>
             </div>
           )}
         </div>
@@ -239,7 +216,7 @@ export const WorkspacePage: React.FC<WorkspacePageProps> = ({
         }}
         onConfirm={handleConfirmProcess}
         title="Xác nhận tiếp nhận và thẩm định văn bản"
-        message="Đồng chí có chắc chắn muốn đưa văn bản này vào quy trình bóc tách thể thức và thẩm định tính pháp lý tự động theo Nghị định số 30/2020/NĐ-CP?"
+        message="Đồng chí có chắc chắn muốn đưa văn bản này vào quy trình bóc tách thể thức và thẩm định tính pháp lý tự động?"
         detail={
           pendingFile
             ? `Tệp tin: ${pendingFile.name} • Dung lượng: ${(pendingFile.size / 1024).toFixed(1)} KB`

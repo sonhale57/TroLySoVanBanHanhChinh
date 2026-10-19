@@ -22,38 +22,38 @@ export const AppraisalVerdictCard: React.FC<AppraisalVerdictCardProps> = ({ verd
     switch (type) {
       case 'APPROVED':
         return {
-          badgeBg: 'bg-emerald-50 text-emerald-800 border-emerald-300',
-          titleColor: 'text-emerald-800',
+          badgeBg: 'bg-emerald-100 text-emerald-950 border-emerald-400 whitespace-nowrap',
+          titleColor: 'text-emerald-900',
           borderColor: 'border-emerald-300',
-          cardBg: 'bg-emerald-50/20',
-          icon: <CheckCircle2 className="w-5 h-5 text-emerald-600" />,
+          cardBg: 'bg-emerald-50/30',
+          icon: <CheckCircle2 className="w-5 h-5 text-emerald-700 flex-shrink-0" />,
           label: 'ĐỦ ĐIỀU KIỆN - THỐNG NHẤT CHẤP THUẬN',
         };
       case 'REQUIRE_ADDITIONAL_INFO':
         return {
-          badgeBg: 'bg-amber-50 text-amber-900 border-amber-300',
-          titleColor: 'text-amber-900',
+          badgeBg: 'bg-amber-100 text-amber-950 border-amber-400 whitespace-nowrap',
+          titleColor: 'text-amber-950',
           borderColor: 'border-amber-300',
-          cardBg: 'bg-amber-50/20',
-          icon: <AlertTriangle className="w-5 h-5 text-amber-600" />,
+          cardBg: 'bg-amber-50/30',
+          icon: <AlertTriangle className="w-5 h-5 text-amber-700 flex-shrink-0" />,
           label: 'CHƯA ĐỦ ĐIỀU KIỆN - YÊU CẦU BỔ SUNG HỒ SƠ',
         };
       case 'REJECTED':
         return {
-          badgeBg: 'bg-red-50 text-red-900 border-red-300',
-          titleColor: 'text-red-900',
+          badgeBg: 'bg-red-100 text-red-950 border-red-400 whitespace-nowrap',
+          titleColor: 'text-red-950',
           borderColor: 'border-red-300',
-          cardBg: 'bg-red-50/20',
-          icon: <XCircle className="w-5 h-5 text-red-600" />,
+          cardBg: 'bg-red-50/30',
+          icon: <XCircle className="w-5 h-5 text-red-700 flex-shrink-0" />,
           label: 'KHÔNG ĐỦ ĐIỀU KIỆN - TỪ CHỐI GIẢI QUYẾT',
         };
       default:
         return {
-          badgeBg: 'bg-slate-50 text-slate-800 border-slate-300',
-          titleColor: 'text-slate-800',
+          badgeBg: 'bg-slate-100 text-slate-900 border-slate-300 whitespace-nowrap',
+          titleColor: 'text-slate-900',
           borderColor: 'border-slate-300',
-          cardBg: 'bg-slate-50/20',
-          icon: <ArrowRightCircle className="w-5 h-5 text-slate-600" />,
+          cardBg: 'bg-slate-50/30',
+          icon: <ArrowRightCircle className="w-5 h-5 text-slate-700 flex-shrink-0" />,
           label: 'KHÔNG THUỘC THẨM QUYỀN - CHUYỂN NƠI KHÁC',
         };
     }

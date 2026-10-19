@@ -44,10 +44,12 @@ namespace GovDoc.Tests
             using var stream = new MemoryStream(docxBytes);
             using var wordDoc = WordprocessingDocument.Open(stream, false);
 
-            var body = wordDoc.MainDocumentPart?.Document.Body;
+            Assert.NotNull(wordDoc.MainDocumentPart);
+            Assert.NotNull(wordDoc.MainDocumentPart.Document);
+            var body = wordDoc.MainDocumentPart.Document.Body;
             Assert.NotNull(body);
 
-            var sectionProps = body.Elements<SectionProperties>().LastOrDefault();
+            var sectionProps = body!.Elements<SectionProperties>().LastOrDefault();
             Assert.NotNull(sectionProps);
 
             var pageMargin = sectionProps.Elements<PageMargin>().FirstOrDefault();
@@ -73,6 +75,42 @@ namespace GovDoc.Tests
             Assert.NotNull(borders);
             Assert.Equal(BorderValues.None, borders.TopBorder?.Val?.Value);
             Assert.Equal(BorderValues.None, borders.LeftBorder?.Val?.Value);
+        }
+
+        [Fact]
+        public void GenerateOfficialDispatch_CustomProvinceHanoi_ShouldNotContainBinhDuong()
+        {
+            // Arrange
+            var model = new OfficialDispatchDraftModel
+            {
+                IssuerParent = "ỦY BAN NHÂN DÂN THÀNH PHỐ HÀ NỘI",
+                IssuerName = "VĂN PHÒNG",
+                DocCode = "105/VP-UBND",
+                Location = "Hà Nội",
+                DocDateStr = "16 tháng 10 năm 2026",
+                SubjectTitle = "Phúc đáp văn bản về quy hoạch chi tiết",
+                RecipientMain = "Sở Quy hoạch - Kiến trúc Hà Nội",
+                LegalBases = new() { "Luật Thủ đô ngày 28/06/2024" },
+                ContentParagraphs = new() { "UBND thành phố chấp thuận phương án theo đề xuất." },
+                RecipientsList = new() { "Như trên", "Chủ tịch UBND TP", "Lưu: VT" },
+                SignerTitle = "CHÁNH VĂN PHÒNG",
+                SignerName = "Trần Thị Mai"
+            };
+
+            var builder = new Decree30DocxBuilder();
+
+            // Act
+            byte[] docxBytes = builder.GenerateOfficialDispatch(model);
+
+            // Assert
+            using var stream = new MemoryStream(docxBytes);
+            using var wordDoc = WordprocessingDocument.Open(stream, false);
+            var fullDocxText = wordDoc.MainDocumentPart?.Document.Body?.InnerText ?? string.Empty;
+
+            Assert.DoesNotContain("Bình Dương", fullDocxText);
+            Assert.Contains("HÀ NỘI", fullDocxText);
+            Assert.Contains("Trần Thị Mai", fullDocxText);
+            Assert.Contains("105/VP-UBND", fullDocxText);
         }
     }
 }

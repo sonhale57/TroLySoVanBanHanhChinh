@@ -121,9 +121,6 @@ export const Header: React.FC<HeaderProps> = ({
                 <div className="hidden sm:block">
                   <div className="text-xs font-bold text-white flex items-center gap-1.5 leading-none">
                     {user.fullName}
-                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-gov-gold text-gov-text font-black">
-                      {user.role}
-                    </span>
                   </div>
                   <div className="text-[11px] text-white/80 mt-0.5 max-w-[160px] truncate">
                     {user.department}
@@ -189,11 +186,10 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={() => handleNav('/')}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
-                activeNav === 'workspace'
-                  ? 'bg-gov-primary text-white shadow-sm'
-                  : 'text-gov-text-secondary hover:text-gov-text hover:bg-gov-bg'
-              }`}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${activeNav === 'workspace'
+                ? 'bg-gov-primary text-white shadow-sm'
+                : 'text-gov-text-secondary hover:text-gov-text hover:bg-gov-bg'
+                }`}
             >
               <FileText className={`w-4 h-4 ${activeNav === 'workspace' ? 'text-white' : 'text-gov-primary'}`} />
               <span>Bàn làm việc</span>
@@ -203,11 +199,10 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={() => handleNav('/processed-documents')}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
-                activeNav === 'processed-docs'
-                  ? 'bg-gov-primary text-white shadow-sm'
-                  : 'text-gov-text-secondary hover:text-gov-text hover:bg-gov-bg'
-              }`}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${activeNav === 'processed-docs'
+                ? 'bg-gov-primary text-white shadow-sm'
+                : 'text-gov-text-secondary hover:text-gov-text hover:bg-gov-bg'
+                }`}
             >
               <FolderArchive className={`w-4 h-4 ${activeNav === 'processed-docs' ? 'text-white' : 'text-gov-gold'}`} />
               <span>Hồ sơ đã xử lý</span>
@@ -217,11 +212,10 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={() => handleNav(user?.role === 'ADMIN' ? '/admin/legal-kb' : '/legal-lookup')}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
-                activeNav === 'legal-kb' || activeNav === 'lookup'
-                  ? 'bg-gov-primary text-white shadow-sm'
-                  : 'text-gov-text-secondary hover:text-gov-text hover:bg-gov-bg'
-              }`}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${activeNav === 'legal-kb' || activeNav === 'lookup'
+                ? 'bg-gov-primary text-white shadow-sm'
+                : 'text-gov-text-secondary hover:text-gov-text hover:bg-gov-bg'
+                }`}
             >
               <BookMarked className={`w-4 h-4 ${activeNav === 'legal-kb' || activeNav === 'lookup' ? 'text-gov-gold-light' : 'text-gov-gold'}`} />
               <span>
@@ -234,11 +228,10 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 type="button"
                 onClick={() => handleNav('/admin/users')}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
-                  activeNav === 'users'
-                    ? 'bg-gov-primary text-white shadow-sm'
-                    : 'text-gov-text-secondary hover:text-gov-text hover:bg-gov-bg'
-                }`}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${activeNav === 'users'
+                  ? 'bg-gov-primary text-white shadow-sm'
+                  : 'text-gov-text-secondary hover:text-gov-text hover:bg-gov-bg'
+                  }`}
               >
                 <Users className={`w-4 h-4 ${activeNav === 'users' ? 'text-white' : 'text-gov-primary'}`} />
                 <span>Quản lý Cán bộ</span>
@@ -267,7 +260,7 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="h-3.5 w-px bg-gov-border" />
             <div className="flex items-center gap-1.5 text-[11px] font-semibold text-gov-active">
               <ShieldCheck className="w-3.5 h-3.5" />
-              <span>An toàn cấp độ 3 • Chuẩn NĐ 30/2020</span>
+              <span>An toàn cấp độ 3</span>
             </div>
           </div>
         </div>

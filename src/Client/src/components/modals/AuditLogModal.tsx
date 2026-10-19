@@ -38,17 +38,17 @@ export const AuditLogModal: React.FC<AuditLogModalProps> = ({ isOpen, onClose })
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="relative bg-white rounded-2xl shadow-2xl border border-gov-border w-full max-w-5xl max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in duration-200">
+      <div className="relative bg-white rounded-2xl shadow-2xl border border-gov-border w-full max-w-7xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in duration-200">
         {/* Header */}
         <div className="px-6 py-4 bg-gov-primary text-white flex items-center justify-between border-b-2 border-gov-gold">
           <div className="flex items-center gap-2.5">
-            <History className="w-5 h-5 text-gov-gold" />
+            <History className="w-5 h-5 text-gov-gold flex-shrink-0" />
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-base font-bold uppercase tracking-wide">
                   Nhật Ký Xử Lý Công Văn Hành Chính (Audit Log Bất Biến)
                 </h2>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-gov-gold text-gov-text font-black">
+                <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-gov-gold text-gov-text font-black whitespace-nowrap shadow-sm">
                   {isAdmin ? 'Toàn cơ quan' : 'Cá nhân & Hồ sơ liên quan'}
                 </span>
               </div>
@@ -62,7 +62,7 @@ export const AuditLogModal: React.FC<AuditLogModalProps> = ({ isOpen, onClose })
           <button
             type="button"
             onClick={onClose}
-            className="p-1 rounded-lg hover:bg-white/20 text-white/80 hover:text-white transition-colors"
+            className="p-1 rounded-lg hover:bg-white/20 text-white/80 hover:text-white transition-colors flex-shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
@@ -71,14 +71,14 @@ export const AuditLogModal: React.FC<AuditLogModalProps> = ({ isOpen, onClose })
         {/* Info Banner Phân quyền */}
         <div className="px-6 py-2.5 bg-gov-subtle/70 border-b border-gov-border flex items-center justify-between text-xs text-gov-text-secondary">
           <div className="flex items-center gap-1.5 font-medium">
-            <ShieldCheck className="w-4 h-4 text-gov-active" />
+            <ShieldCheck className="w-4 h-4 text-gov-active flex-shrink-0" />
             <span>
               {isAdmin
                 ? `Đang hiển thị dòng thời gian xử lý toàn cơ quan (${logs.length} bản ghi gần nhất)`
                 : `Bảo mật công vụ: Đang hiển thị lịch sử của đồng chí @${user?.username} và các hồ sơ liên quan (${logs.length} bản ghi)`}
             </span>
           </div>
-          <span className="text-[11px] font-semibold text-gov-text-disabled">Chuẩn Nghị định 30/2020/NĐ-CP</span>
+          <span className="text-[11px] font-semibold text-gov-text-disabled whitespace-nowrap">Nhật ký công vụ điện tử</span>
         </div>
 
         {/* Content */}
@@ -94,75 +94,77 @@ export const AuditLogModal: React.FC<AuditLogModalProps> = ({ isOpen, onClose })
               <p className="text-xs font-semibold">Chưa có nhật ký xử lý công văn nào phù hợp.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border border-gov-border">
+            <div className="overflow-x-auto rounded-lg border border-gov-border">
+              <table className="w-full text-left text-xs">
                 <thead className="bg-gov-subtle text-gov-text font-bold uppercase text-[11px] border-b border-gov-border">
                   <tr>
-                    <th className="p-3">Thời gian</th>
-                    <th className="p-3">Số hiệu & Trích yếu</th>
-                    <th className="p-3">Cơ quan ban hành</th>
-                    <th className="p-3">Mức độ khẩn</th>
-                    <th className="p-3">Cán bộ xử lý</th>
-                    <th className="p-3">Phương án</th>
-                    <th className="p-3">Hạn SLA</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap min-w-[130px]">Thời gian</th>
+                    <th className="px-4 py-3.5 min-w-[280px]">Số hiệu & Trích yếu</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap min-w-[180px]">Cơ quan ban hành</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap min-w-[120px] text-center">Mức độ khẩn</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap min-w-[150px]">Cán bộ xử lý</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap min-w-[130px] text-center">Phương án</th>
+                    <th className="px-4 py-3.5 whitespace-nowrap min-w-[120px]">Hạn SLA</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gov-border">
                   {logs.map((log) => (
                     <tr key={log.id} className="hover:bg-gov-bg/60 transition-colors">
-                      <td className="p-3 text-gov-text font-medium whitespace-nowrap">
-                        <div className="font-semibold">{new Date(log.createdAt).toLocaleDateString('vi-VN')}</div>
-                        <div className="text-[10px] text-gov-text-disabled">
+                      <td className="px-4 py-3.5 text-gov-text font-medium whitespace-nowrap">
+                        <div className="font-semibold text-gray-900">{new Date(log.createdAt).toLocaleDateString('vi-VN')}</div>
+                        <div className="text-[11px] text-gray-500">
                           {new Date(log.createdAt).toLocaleTimeString('vi-VN')}
                         </div>
                       </td>
-                      <td className="p-3 max-w-xs">
-                        <div className="font-bold text-gov-primary flex items-center gap-1">
+                      <td className="px-4 py-3.5">
+                        <div className="font-bold text-gov-primary flex items-center gap-1.5 flex-wrap">
                           <FileText className="w-3.5 h-3.5 text-gov-gold flex-shrink-0" />
-                          <span>{log.incomingDocCode || 'Chưa nhận diện'}</span>
+                          <span className="whitespace-nowrap">{log.incomingDocCode || 'Chưa nhận diện'}</span>
                           {log.isOwner && (
-                            <span className="text-[9px] px-1.5 py-0.2 rounded bg-gov-active-bg text-gov-active font-bold border border-gov-active-border">
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-950 font-bold border border-emerald-300 whitespace-nowrap">
                               Của tôi
                             </span>
                           )}
                         </div>
-                        <div className="text-[11px] text-gov-text-secondary mt-0.5 line-clamp-2" title={log.subjectTitle || log.originalFileName}>
+                        <div className="text-[11px] text-gov-text-secondary mt-1 line-clamp-2" title={log.subjectTitle || log.originalFileName}>
                           {log.subjectTitle || log.originalFileName}
                         </div>
                       </td>
-                      <td className="p-3 whitespace-nowrap text-gov-text">
+                      <td className="px-4 py-3.5 whitespace-nowrap text-gov-text font-medium">
                         {log.incomingIssuer || 'Đơn vị gửi'}
                       </td>
-                      <td className="p-3 whitespace-nowrap">
+                      <td className="px-4 py-3.5 whitespace-nowrap text-center">
                         <span
-                          className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
+                          className={`inline-block px-2.5 py-1 rounded text-[11px] font-bold whitespace-nowrap ${
                             log.urgencyLevel === 'HỎA TỐC'
-                              ? 'bg-gov-danger-bg text-gov-danger border border-gov-danger-border'
+                              ? 'bg-red-100 text-red-950 border border-red-400'
                               : log.urgencyLevel === 'KHẨN'
-                              ? 'bg-gov-warning-bg text-gov-warning border border-gov-warning-border'
-                              : 'bg-gray-100 text-gray-700'
+                              ? 'bg-amber-100 text-amber-950 border border-amber-400'
+                              : 'bg-slate-100 text-slate-800 border border-slate-300'
                           }`}
                         >
                           {log.urgencyLevel}
                         </span>
                       </td>
-                      <td className="p-3 whitespace-nowrap font-semibold text-gov-text">
-                        <div className="flex items-center gap-1">
-                          <User className="w-3 h-3 text-gov-text-disabled" />
+                      <td className="px-4 py-3.5 whitespace-nowrap font-semibold text-gov-text">
+                        <div className="flex items-center gap-1.5">
+                          <User className="w-3.5 h-3.5 text-gov-text-disabled flex-shrink-0" />
                           <span>{log.userName}</span>
                         </div>
                       </td>
-                      <td className="p-3 whitespace-nowrap font-bold text-gov-active">
-                        {log.selectedOptionId}
+                      <td className="px-4 py-3.5 whitespace-nowrap text-center">
+                        <span className="inline-block px-2.5 py-1 rounded bg-blue-50 text-blue-950 font-bold border border-blue-200 whitespace-nowrap">
+                          {log.selectedOptionId}
+                        </span>
                       </td>
-                      <td className="p-3 whitespace-nowrap">
+                      <td className="px-4 py-3.5 whitespace-nowrap">
                         {log.slaDeadline ? (
-                          <span className="text-gov-danger font-medium flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
+                          <span className="text-red-700 font-semibold flex items-center gap-1 whitespace-nowrap">
+                            <Clock className="w-3.5 h-3.5 flex-shrink-0" />
                             <span>{new Date(log.slaDeadline).toLocaleDateString('vi-VN')}</span>
                           </span>
                         ) : (
-                          <span className="text-gov-text-disabled">-</span>
+                          <span className="text-gray-400 whitespace-nowrap">-</span>
                         )}
                       </td>
                     </tr>

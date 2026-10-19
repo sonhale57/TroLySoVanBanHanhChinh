@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Eye, FileCode2, ZoomIn, ZoomOut, RotateCcw, AlertCircle, FileCheck2 } from 'lucide-react';
+import { Eye, FileCode2, ZoomIn, ZoomOut, RotateCcw, FileCheck2, Copy, Check, ExternalLink, FileText, AlertCircle } from 'lucide-react';
 import { DocumentInfo } from '../../types';
 
 interface DocumentViewerProps {
@@ -7,12 +7,15 @@ interface DocumentViewerProps {
   extractedRawText?: string;
 }
 
+const API_SERVER_URL = import.meta.env.VITE_API_SERVER_URL ?? (import.meta.env.PROD ? '' : 'http://localhost:5050');
+
 export const DocumentViewer: React.FC<DocumentViewerProps> = ({
   documentInfo,
   extractedRawText,
 }) => {
   const [activeTab, setActiveTab] = useState<'visual' | 'ocr'>('visual');
   const [zoomLevel, setZoomLevel] = useState(100);
+  const [isCopied, setIsCopied] = useState(false);
 
   if (!documentInfo) {
     return (
@@ -22,7 +25,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
         </div>
         <p className="text-sm font-semibold text-gov-text">Chưa có văn bản nào được tải lên</p>
         <p className="text-xs text-gov-text-secondary mt-1 max-w-sm">
-          Kéo thả tệp công văn hoặc chọn một hồ sơ mẫu bên trên để bắt đầu phân tích thể thức và tra cứu căn cứ pháp lý.
+          Kéo thả tệp công văn (PDF, DOCX, TXT) để bắt đầu bóc tách thể thức và thẩm định tính pháp lý thực tế.
         </p>
       </div>
     );
@@ -32,8 +35,35 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
   const handleZoomOut = () => setZoomLevel((prev) => Math.max(prev - 15, 75));
   const handleResetZoom = () => setZoomLevel(100);
 
+  const handleCopyText = async () => {
+    if (!extractedRawText) return;
+    try {
+      await navigator.clipboard.writeText(extractedRawText);
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+    } catch {
+      // Bỏ qua lỗi copy
+    }
+  };
+
+  const fileNameLower = (documentInfo.originalFileName || '').toLowerCase();
+  const isPdf = fileNameLower.endsWith('.pdf');
+  const isImage = fileNameLower.endsWith('.png') || fileNameLower.endsWith('.jpg') || fileNameLower.endsWith('.jpeg');
+  
+  const fileFullUrl = documentInfo.previewUrl
+    ? (documentInfo.previewUrl.startsWith('http')
+        ? documentInfo.previewUrl
+        : `${API_SERVER_URL}${documentInfo.previewUrl}`)
+    : '';
+
+  // Chia đoạn văn bản trích xuất sạch sẽ để hiển thị chân thực
+  const rawParagraphs = (extractedRawText || '')
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0);
+
   return (
-    <div className="bg-white rounded-xl shadow-card border border-gov-border flex flex-col h-full overflow-hidden">
+    <div className="bg-white rounded-xl shadow-card border border-gov-border flex flex-col h-[720px] max-h-[780px] overflow-hidden">
       {/* Viewer Header */}
       <div className="px-4 py-2.5 bg-gov-subtle/50 border-b border-gov-border flex items-center justify-between">
         <div className="flex items-center gap-1.5 bg-white p-1 rounded-lg border border-gov-border">
@@ -47,7 +77,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
             }`}
           >
             <Eye className="w-3.5 h-3.5" />
-            Văn bản gốc
+            Văn bản gốc thực tế
           </button>
           <button
             type="button"
@@ -59,11 +89,11 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
             }`}
           >
             <FileCode2 className="w-3.5 h-3.5" />
-            Dữ liệu OCR trích xuất
+            Dữ liệu bóc tách điện tử
           </button>
         </div>
 
-        {/* Zoom Controls */}
+        {/* Zoom & Action Controls */}
         <div className="flex items-center gap-1 text-xs text-gov-text-secondary">
           <button
             type="button"
@@ -85,118 +115,147 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
           <button
             type="button"
             onClick={handleResetZoom}
-            className="p-1 rounded hover:bg-white border border-transparent hover:border-gov-border transition-colors ml-1"
-            title="Đặt lại"
+            className="p-1 rounded hover:bg-white border border-transparent hover:border-gov-border transition-colors ml-0.5"
+            title="Đặt lại zoom 100%"
           >
             <RotateCcw className="w-3.5 h-3.5" />
           </button>
+          {fileFullUrl && (
+            <a
+              href={fileFullUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="p-1 ml-1 rounded hover:bg-white border border-transparent hover:border-gov-border text-gov-primary transition-colors flex items-center"
+              title="Mở tệp gốc trong tab mới"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+          )}
         </div>
       </div>
 
       {/* Viewer Body */}
-      <div className="flex-1 p-4 overflow-auto bg-[#E5E9F0]/60 flex items-start justify-center min-h-[500px]">
+      <div className="flex-1 p-4 overflow-y-auto bg-[#E5E9F0]/60 flex items-start justify-center">
         {activeTab === 'visual' ? (
-          documentInfo.previewUrl && documentInfo.previewUrl.includes('/api/v1/storage/file/') && documentInfo.originalFileName.toLowerCase().endsWith('.pdf') ? (
-            <div className="w-full h-full min-h-[580px] bg-white rounded border border-gov-border shadow-elevation overflow-hidden">
+          isPdf && fileFullUrl ? (
+            <div
+              style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center' }}
+              className="w-full h-full min-h-[620px] bg-white rounded border border-gov-border shadow-elevation overflow-hidden transition-transform duration-150"
+            >
               <iframe
-                src={`http://localhost:5050${documentInfo.previewUrl}`}
-                className="w-full h-[600px] border-0"
+                src={fileFullUrl}
+                className="w-full h-[620px] border-0"
                 title={`Văn bản gốc: ${documentInfo.originalFileName}`}
               />
             </div>
-          ) : (
+          ) : isImage && fileFullUrl ? (
             <div
               style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center' }}
-              className="w-full max-w-[560px] bg-white p-7 shadow-elevation rounded border border-gov-border text-gov-text transition-transform duration-150 font-serif"
+              className="max-w-full bg-white p-4 shadow-elevation rounded border border-gov-border transition-transform duration-150 flex flex-col items-center"
             >
-              {/* Header Document Simulation */}
-              <div className="grid grid-cols-2 gap-2 text-center text-xs pb-4 border-b border-gray-300">
-                <div className="border-r border-gray-200 pr-2">
-                  <div className="font-normal uppercase text-[11px] leading-tight">
-                    {documentInfo.issuer}
-                  </div>
-                  <div className="font-bold text-[12px] mt-0.5">VĂN PHÒNG</div>
-                  <div className="text-[11px] mt-1 text-gray-700">
-                    Số: <span className="font-bold text-gov-primary">{documentInfo.codeNumber}</span>
-                  </div>
+              <img
+                src={fileFullUrl}
+                alt={documentInfo.originalFileName}
+                className="max-w-full h-auto object-contain rounded"
+              />
+            </div>
+          ) : (
+            /* Hiển thị văn bản thật đã bóc tách trên trang tài liệu tiêu chuẩn, KHÔNG mô phỏng giả Bình Dương */
+            <div
+              style={{ transform: `scale(${zoomLevel / 100})`, transformOrigin: 'top center' }}
+              className="w-full max-w-[620px] bg-white p-8 shadow-elevation rounded border border-gray-300 text-gov-text transition-transform duration-150 leading-relaxed"
+            >
+              {/* Thanh thông tin nhận diện tài liệu thật */}
+              <div className="mb-5 pb-3 border-b border-gray-200 text-xs flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-gov-primary bg-gov-primary-light/50 px-2 py-0.5 rounded text-[11px] whitespace-nowrap">
+                    {documentInfo.issuer || 'Cơ quan gửi'}
+                  </span>
+                  <span className="font-semibold text-gray-700 text-[11px] whitespace-nowrap">
+                    Số: {documentInfo.codeNumber || 'Chưa có số'}
+                  </span>
                 </div>
-                <div className="pl-2">
-                  <div className="font-bold text-[11px] uppercase leading-tight">
-                    CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM
-                  </div>
-                  <div className="font-bold text-[12px] underline decoration-gov-gold mt-0.5">
-                    Độc lập - Tự do - Hạnh phúc
-                  </div>
-                  <div className="text-[11px] italic mt-1 text-gray-700">
-                    Bình Dương, ngày {documentInfo.issuedDate}
-                  </div>
+                <div className="flex items-center gap-2 text-[11px] text-gray-600">
+                  <span className="whitespace-nowrap">Ngày: {documentInfo.issuedDate}</span>
+                  {documentInfo.urgency && documentInfo.urgency !== 'THƯỜNG' && (
+                    <span className="bg-red-100 text-red-900 border border-red-300 font-bold px-2 py-0.5 rounded text-[10px] whitespace-nowrap">
+                      {documentInfo.urgency}
+                    </span>
+                  )}
                 </div>
               </div>
 
-              {/* Urgency Stamp */}
-              {documentInfo.urgency === 'HỎA TỐC' && (
-                <div className="my-3 flex justify-end">
-                  <div className="border-2 border-gov-danger text-gov-danger font-bold text-xs uppercase px-2.5 py-0.5 rounded tracking-widest inline-block shadow-sm rotate-[-3deg]">
-                    HỎA TỐC
-                  </div>
+              {/* Trích yếu nhận diện thật */}
+              {documentInfo.subjectTitle && (
+                <div className="mb-4 text-xs font-bold text-gray-900 bg-gray-50 p-2.5 rounded border border-gray-200">
+                  <span className="text-gov-primary mr-1">Trích yếu:</span>
+                  {documentInfo.subjectTitle}
                 </div>
               )}
 
-              {/* Subject */}
-              <div className="my-4 text-center">
-                <div className="text-xs font-bold text-gov-text">
-                  V/v {documentInfo.codeNumber}: Xử lý văn bản công vụ
-                </div>
-              </div>
-
-              {/* Content text */}
-              <div className="text-xs space-y-2 text-justify leading-relaxed text-gray-800">
-                <p className="font-bold">Kính gửi: Thường trực Ủy ban nhân dân Tỉnh Bình Dương.</p>
-                {extractedRawText ? (
-                  <div className="whitespace-pre-wrap font-sans text-xs text-gray-700 bg-gov-subtle/30 p-3 rounded border border-gov-border max-h-[300px] overflow-auto">
-                    {extractedRawText}
-                  </div>
+              {/* Toàn văn nội dung tài liệu thật */}
+              <div className="text-[13px] text-gray-800 space-y-3 leading-relaxed">
+                {rawParagraphs.length > 0 ? (
+                  rawParagraphs.map((para, idx) => (
+                    <p key={idx} className="indent-6 text-justify whitespace-pre-wrap">
+                      {para}
+                    </p>
+                  ))
+                ) : extractedRawText ? (
+                  <div className="whitespace-pre-wrap text-justify">{extractedRawText}</div>
                 ) : (
-                  <p className="indent-6">
-                    Hồ sơ công văn đã được tiếp nhận và xử lý theo đúng quy trình hành chính công.
-                  </p>
-                )}
-              </div>
-
-              {/* Footer Signatures */}
-              <div className="grid grid-cols-2 gap-4 mt-8 pt-4 text-xs">
-                <div>
-                  <span className="font-bold italic">Nơi nhận:</span>
-                  <ul className="text-[11px] text-gray-700 mt-1 space-y-0.5">
-                    <li>- Như trên;</li>
-                    <li>- Lưu: VT.</li>
-                  </ul>
-                </div>
-                <div className="text-center">
-                  <div className="font-bold uppercase text-[11px]">LÃNH ĐẠO ĐƠN VỊ</div>
-                  <div className="h-12 flex items-center justify-center italic text-gov-danger font-sans text-xs">
-                    (Đã ký & đóng dấu công vụ)
+                  <div className="text-center py-10 text-gray-400 text-xs">
+                    <FileText className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                    Đang giải mã và bóc tách nội dung văn bản thực tế...
                   </div>
-                </div>
+                )}
               </div>
             </div>
           )
         ) : (
-          <div className="w-full h-full bg-white p-4 rounded border border-gov-border font-mono text-xs text-gov-text overflow-auto whitespace-pre-wrap leading-relaxed shadow-inner">
-            <div className="flex items-center gap-2 pb-2 mb-3 border-b border-gov-border text-gov-active font-sans font-bold">
-              <FileCheck2 className="w-4 h-4" />
-              Đã trích xuất chính xác cấu trúc văn bản công vụ:
+          /* Tab Dữ liệu OCR / Text Bóc tách chi tiết */
+          <div className="w-full h-full bg-white p-5 rounded border border-gov-border flex flex-col shadow-inner">
+            <div className="flex items-center justify-between pb-3 mb-3 border-b border-gov-border">
+              <div className="flex items-center gap-2 text-gov-active font-bold text-xs">
+                <FileCheck2 className="w-4 h-4" />
+                <span>Nội dung văn bản đã bóc tách và chuẩn hóa ngắt từ:</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-[11px] text-gray-600 whitespace-nowrap">
+                  {extractedRawText ? `${extractedRawText.length} ký tự` : ''}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleCopyText}
+                  className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded bg-gov-subtle hover:bg-gray-200 text-gov-text border border-gov-border transition-colors whitespace-nowrap"
+                >
+                  {isCopied ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <span className="text-emerald-700 font-bold">Đã sao chép</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Sao chép</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
-            {extractedRawText || 'Đang cập nhật nội dung văn bản...'}
+
+            <div className="flex-1 text-xs text-gray-800 overflow-auto whitespace-pre-wrap leading-relaxed bg-gray-50 p-4 rounded border border-gray-200">
+              {extractedRawText || 'Chưa có dữ liệu trích xuất từ văn bản này.'}
+            </div>
           </div>
         )}
       </div>
 
       {/* Footer Info */}
       <div className="px-4 py-2 bg-gov-subtle border-t border-gov-border flex items-center justify-between text-[11px] text-gov-text-secondary">
-        <span>Tệp: {documentInfo.originalFileName}</span>
+        <span className="truncate max-w-[280px]">Tệp: {documentInfo.originalFileName}</span>
         <span className="flex items-center gap-1 font-semibold text-gov-active">
-          <FileCheck2 className="w-3.5 h-3.5" /> Thể thức hợp lệ
+          <FileCheck2 className="w-3.5 h-3.5" /> Thể thức văn bản hợp lệ
         </span>
       </div>
     </div>

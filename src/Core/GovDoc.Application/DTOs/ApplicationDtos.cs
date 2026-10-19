@@ -120,6 +120,15 @@ namespace GovDoc.Application.DTOs
         public Guid? ExistingTargetDocId { get; set; }
     }
 
+    public class LegalClauseInputDto
+    {
+        public Guid? Id { get; set; }
+        public string ArticleNumber { get; set; } = string.Empty;
+        public string? ClauseNumber { get; set; }
+        public string RawContent { get; set; } = string.Empty;
+        public string Status { get; set; } = "ACTIVE";
+    }
+
     public class ManualLegalDocDto
     {
         public string CodeNumber { get; set; } = string.Empty;
@@ -130,6 +139,7 @@ namespace GovDoc.Application.DTOs
         public DateTime? ExpiredDate { get; set; }
         public string Status { get; set; } = "ACTIVE";
         public string? Notes { get; set; }
+        public List<LegalClauseInputDto>? Clauses { get; set; }
     }
 
     public class UpdateLegalDocDto
@@ -141,6 +151,8 @@ namespace GovDoc.Application.DTOs
         public DateTime EffectiveDate { get; set; }
         public DateTime? ExpiredDate { get; set; }
         public string Status { get; set; } = "ACTIVE";
+        public string? Notes { get; set; }
+        public List<LegalClauseInputDto>? Clauses { get; set; }
     }
 
     public class LegalSearchResultDto

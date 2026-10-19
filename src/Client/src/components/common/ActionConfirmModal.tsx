@@ -89,7 +89,7 @@ export const ActionConfirmModal: React.FC<ActionConfirmModalProps> = ({
           {detail && (
             <div className="p-3 rounded-xl bg-gov-bg border border-gov-border text-xs text-gov-text-secondary flex items-start gap-2.5">
               <CheckCircle2 className="w-4 h-4 text-gov-gold mt-0.5 flex-shrink-0" />
-              <div className="break-all font-mono text-[11px] text-gov-text">
+              <div className="break-all text-[11px] text-gov-text font-medium leading-relaxed">
                 {detail}
               </div>
             </div>

@@ -90,7 +90,8 @@ namespace GovDoc.Infrastructure.WordEngine
                 var cellRight = new TableCell(new TableCellProperties(new TableCellWidth() { Type = TableWidthUnitValues.Dxa, Width = "4555" }));
                 cellRight.Append(CreateParagraph("CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM", 12, true, false, JustificationValues.Center));
                 cellRight.Append(CreateParagraph("Độc lập - Tự do - Hạnh phúc", 13, true, false, JustificationValues.Center));
-                cellRight.Append(CreateParagraph($"{location ?? "Bình Dương"}, ngày {docDateStr ?? DateTime.Now.ToString("dd/MM/yyyy")}", 13, false, true, JustificationValues.Center));
+                var locName = !string.IsNullOrWhiteSpace(location) ? location : "Địa danh";
+                cellRight.Append(CreateParagraph($"{locName}, ngày {docDateStr ?? DateTime.Now.ToString("dd/MM/yyyy")}", 13, false, true, JustificationValues.Center));
 
                 headerRow.Append(cellLeft);
                 headerRow.Append(cellRight);
@@ -162,8 +163,10 @@ namespace GovDoc.Infrastructure.WordEngine
                 var cellSignature = new TableCell(new TableCellProperties(new TableCellWidth() { Type = TableWidthUnitValues.Dxa, Width = "4555" }));
                 cellSignature.Append(CreateParagraph((signerTitle ?? "CHỦ TỊCH").ToUpper(), 13, true, false, JustificationValues.Center));
                 // Khoảng trống chữ ký
-                cellSignature.Append(CreateParagraph(string.Empty, 13, false, false, JustificationValues.Center, 720, 720));
-                cellSignature.Append(CreateParagraph(signerName ?? "Nguyễn Văn An", 14, true, false, JustificationValues.Center));
+                if (!string.IsNullOrWhiteSpace(signerName))
+                {
+                    cellSignature.Append(CreateParagraph(signerName, 14, true, false, JustificationValues.Center));
+                }
 
                 footerRow.Append(cellRecipients);
                 footerRow.Append(cellSignature);

@@ -8,7 +8,7 @@ import {
   LegalProposalItem
 } from '../types';
 
-const API_BASE = 'http://localhost:5050/api/v1';
+const API_BASE = import.meta.env.VITE_API_BASE ?? (import.meta.env.PROD ? '/api/v1' : 'http://localhost:5050/api/v1');
 
 export const apiClient = axios.create({
   baseURL: API_BASE,
@@ -152,6 +152,11 @@ export const api = {
     return response.data;
   },
 
+  async getLegalDocument(id: string): Promise<LegalDocumentItem> {
+    const response = await apiClient.get<LegalDocumentItem>(`/legalkb/documents/${id}`);
+    return response.data;
+  },
+
   async addManualDoc(payload: {
     codeNumber: string;
     title: string;
@@ -161,6 +166,7 @@ export const api = {
     expiredDate?: string;
     status: string;
     notes?: string;
+    clauses?: { articleNumber: string; clauseNumber?: string; rawContent: string; status?: string }[];
   }) {
     const response = await apiClient.post('/legalkb/manual', payload);
     return response.data;
@@ -174,6 +180,8 @@ export const api = {
     effectiveDate: string;
     expiredDate?: string;
     status: string;
+    notes?: string;
+    clauses?: { id?: string; articleNumber: string; clauseNumber?: string; rawContent: string; status?: string }[];
   }) {
     const response = await apiClient.put(`/legalkb/${id}`, payload);
     return response.data;

@@ -104,7 +104,7 @@ export const LegalKBModal: React.FC<LegalKBModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="relative bg-white rounded-2xl shadow-2xl border border-gov-border w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in duration-200">
+      <div className="relative bg-white rounded-2xl shadow-2xl border border-gov-border w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in duration-200">
         {/* Header */}
         <div className="px-6 py-4 bg-gov-primary text-white flex items-center justify-between border-b-2 border-gov-gold">
           <div className="flex items-center gap-2.5">
@@ -328,7 +328,7 @@ export const LegalKBModal: React.FC<LegalKBModalProps> = ({
                   value={newFullContent}
                   onChange={(e) => setNewFullContent(e.target.value)}
                   placeholder="Ví dụ: Điều 20. Hiệu lực thi hành. Nghị định này thay thế Nghị định số 45/2021/NĐ-CP ngày 31 tháng 3 năm 2021 của Chính phủ..."
-                  className="w-full px-3 py-2 text-xs rounded-lg border border-gov-border focus:ring-2 focus:ring-gov-primary bg-white text-gov-text font-mono"
+                  className="w-full px-3 py-2 text-xs rounded-lg border border-gov-border focus:ring-2 focus:ring-gov-primary bg-white text-gov-text leading-relaxed"
                 />
                 <p className="text-[11px] text-gov-text-secondary mt-1">
                   * Hệ thống sẽ tự động quét mệnh đề "thay thế Nghị định số..." để thiết lập quan hệ pháp lý và bãi bỏ văn bản cũ.

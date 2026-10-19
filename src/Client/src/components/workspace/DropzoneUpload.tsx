@@ -80,7 +80,7 @@ export const DropzoneUpload: React.FC<DropzoneUploadProps> = ({
           {isLoading ? 'Đang giải mã bóc tách văn bản và tự động thẩm định...' : 'Kéo thả tệp công văn vào đây hoặc bấm để chọn tệp'}
         </p>
         <p className="text-xs text-gov-text-secondary mt-1.5 max-w-md mx-auto">
-          Hệ thống bóc tách tự động 9 thành phần thể thức theo Nghị định 30/2020/NĐ-CP và kích hoạt Động cơ Thẩm định Pháp lý Tự động.
+          Hệ thống bóc tách tự động 9 thành phần thể thức văn bản hành chính và kích hoạt Động cơ Thẩm định Pháp lý Tự động.
         </p>
       </div>
 
@@ -92,7 +92,7 @@ export const DropzoneUpload: React.FC<DropzoneUploadProps> = ({
         </div>
         <div className="flex items-center gap-1">
           <CheckCircle2 className="w-3.5 h-3.5 text-gov-gold" />
-          <span>Chuẩn Nghị định 30/2020/NĐ-CP</span>
+          <span>Chuẩn thể thức văn bản hành chính</span>
         </div>
       </div>
     </div>

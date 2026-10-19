@@ -19,6 +19,9 @@ namespace GovDoc.Application.Common.Interfaces
         public string Recipients { get; set; } = string.Empty;
         public string SignerTitle { get; set; } = string.Empty;
         public string SignerName { get; set; } = string.Empty;
+        public string DocumentCategory { get; set; } = "CONG_VAN"; // CONG_VAN, DANG_KY_DOANH_NGHIEP, GIAY_UY_QUYEN, DON_THU
+        public bool HasFontOrEncodingError { get; set; } = false;
+        public string ExtractionNote { get; set; } = string.Empty;
     }
 
     public interface IOcrService

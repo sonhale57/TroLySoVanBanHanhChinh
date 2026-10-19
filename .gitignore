@@ -24,5 +24,14 @@ TestResults/
 .env.development.local
 .env.test.local
 .env.production.local
+# Deploy binaries and build artifacts
+deploy/*.dll
+deploy/*.exe
+deploy/*.pdb
+deploy/*.deps.json
+deploy/*.runtimeconfig.json
+deploy/runtimes/
+deploy/wwwroot/
+deploy/logs/
 .DS_Store
 Thumbs.db

@@ -186,14 +186,6 @@ export const AdminUserManagementPage: React.FC<AdminUserManagementPageProps> = (
       {/* Top Banner Tiêu đề & Nút Thao tác */}
       <div className="bg-white rounded-xl shadow-card border border-gov-border p-5 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={onBackToWorkspace}
-            className="p-1 rounded-lg hover:bg-gov-subtle text-gov-text-secondary hover:text-gov-text transition-colors"
-            title="Quay lại bàn làm việc"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
           <div className="w-10 h-10 rounded-xl bg-gov-primary-light/60 flex items-center justify-center text-gov-primary">
             <Users className="w-5 h-5 text-gov-primary" />
           </div>
@@ -270,13 +262,13 @@ export const AdminUserManagementPage: React.FC<AdminUserManagementPageProps> = (
             <table className="w-full text-left text-xs">
               <thead className="bg-gov-subtle text-gov-text font-bold uppercase text-[11px] border-b border-gov-border">
                 <tr>
-                  <th className="p-3.5">Cán bộ & Tài khoản</th>
-                  <th className="p-3.5">Vai trò công vụ</th>
-                  <th className="p-3.5">Phòng ban / Đơn vị</th>
-                  <th className="p-3.5">Email liên hệ</th>
-                  <th className="p-3.5">Trạng thái</th>
-                  <th className="p-3.5">Ngày khởi tạo</th>
-                  <th className="p-3.5 text-right">Thao tác quản trị</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap min-w-[220px]">Cán bộ & Tài khoản</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap min-w-[180px]">Vai trò công vụ</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap min-w-[160px]">Phòng ban / Đơn vị</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap min-w-[180px]">Email liên hệ</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap min-w-[130px] text-center">Trạng thái</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap min-w-[120px]">Ngày khởi tạo</th>
+                  <th className="px-4 py-3.5 text-right whitespace-nowrap min-w-[140px]">Thao tác quản trị</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gov-border">
@@ -285,9 +277,9 @@ export const AdminUserManagementPage: React.FC<AdminUserManagementPageProps> = (
                   return (
                     <tr key={u.id} className="hover:bg-gov-bg/60 transition-colors">
                       {/* Cán bộ & Tài khoản */}
-                      <td className="p-3.5 whitespace-nowrap">
+                      <td className="px-4 py-3.5 whitespace-nowrap">
                         <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-full bg-gov-subtle flex items-center justify-center font-bold text-xs text-gov-primary border border-gov-border">
+                          <div className="w-8 h-8 rounded-full bg-gov-subtle flex items-center justify-center font-bold text-xs text-gov-primary border border-gov-border flex-shrink-0">
                             {u.role === 'ADMIN' ? (
                               <Shield className="w-4 h-4 text-gov-primary" />
                             ) : (
@@ -295,15 +287,15 @@ export const AdminUserManagementPage: React.FC<AdminUserManagementPageProps> = (
                             )}
                           </div>
                           <div>
-                            <div className="font-bold text-gov-text flex items-center gap-1.5">
+                            <div className="font-bold text-gov-text flex items-center gap-1.5 flex-wrap">
                               <span>{u.fullName}</span>
                               {isCurrent && (
-                                <span className="text-[9px] px-1.5 py-0.2 rounded bg-gov-gold text-gov-text font-black">
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-gov-gold text-gov-text font-black whitespace-nowrap shadow-sm">
                                   Tôi
                                 </span>
                               )}
                             </div>
-                            <div className="text-[11px] font-mono text-gov-text-secondary">
+                            <div className="text-[11px] text-gov-text-secondary">
                               @{u.username}
                             </div>
                           </div>
@@ -311,22 +303,22 @@ export const AdminUserManagementPage: React.FC<AdminUserManagementPageProps> = (
                       </td>
 
                       {/* Vai trò */}
-                      <td className="p-3.5 whitespace-nowrap">
+                      <td className="px-4 py-3.5 whitespace-nowrap">
                         <span
-                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-black ${
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap ${
                             u.role === 'ADMIN'
-                              ? 'bg-gov-primary-light text-gov-primary border border-gov-primary/30'
-                              : 'bg-gov-bg text-gov-text-secondary border border-gov-border'
+                              ? 'bg-blue-100 text-blue-950 border border-blue-300'
+                              : 'bg-slate-100 text-slate-800 border border-slate-300'
                           }`}
                         >
                           {u.role === 'ADMIN' ? (
                             <>
-                              <Shield className="w-3 h-3 text-gov-primary" />
+                              <Shield className="w-3.5 h-3.5 text-blue-700 flex-shrink-0" />
                               <span>Trưởng phòng (ADMIN)</span>
                             </>
                           ) : (
                             <>
-                              <User className="w-3 h-3" />
+                              <User className="w-3.5 h-3.5 text-slate-600 flex-shrink-0" />
                               <span>Chuyên viên (USER)</span>
                             </>
                           )}
@@ -334,18 +326,18 @@ export const AdminUserManagementPage: React.FC<AdminUserManagementPageProps> = (
                       </td>
 
                       {/* Phòng ban */}
-                      <td className="p-3.5 whitespace-nowrap">
+                      <td className="px-4 py-3.5 whitespace-nowrap">
                         <div className="flex items-center gap-1.5 font-medium text-gov-text">
-                          <Building className="w-3.5 h-3.5 text-gov-text-disabled" />
+                          <Building className="w-3.5 h-3.5 text-gov-text-disabled flex-shrink-0" />
                           <span>{u.department}</span>
                         </div>
                       </td>
 
                       {/* Email */}
-                      <td className="p-3.5 whitespace-nowrap text-gov-text-secondary">
+                      <td className="px-4 py-3.5 whitespace-nowrap text-gov-text-secondary">
                         {u.email ? (
                           <div className="flex items-center gap-1.5">
-                            <Mail className="w-3.5 h-3.5 text-gov-text-disabled" />
+                            <Mail className="w-3.5 h-3.5 text-gov-text-disabled flex-shrink-0" />
                             <span>{u.email}</span>
                           </div>
                         ) : (
@@ -354,12 +346,12 @@ export const AdminUserManagementPage: React.FC<AdminUserManagementPageProps> = (
                       </td>
 
                       {/* Trạng thái */}
-                      <td className="p-3.5 whitespace-nowrap">
+                      <td className="px-4 py-3.5 whitespace-nowrap text-center">
                         <span
-                          className={`inline-block px-2.5 py-0.5 rounded text-[11px] font-bold ${
+                          className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-bold whitespace-nowrap shadow-sm ${
                             u.isActive
-                              ? 'bg-gov-active-bg text-gov-active border border-gov-active-border'
-                              : 'bg-gov-danger-bg text-gov-danger border border-gov-danger-border'
+                              ? 'bg-emerald-100 text-emerald-950 border border-emerald-400'
+                              : 'bg-red-100 text-red-950 border border-red-400'
                           }`}
                         >
                           {u.isActive ? 'Đang hoạt động' : 'Tạm khóa'}
@@ -367,12 +359,12 @@ export const AdminUserManagementPage: React.FC<AdminUserManagementPageProps> = (
                       </td>
 
                       {/* Ngày khởi tạo */}
-                      <td className="p-3.5 whitespace-nowrap text-gov-text-secondary text-[11px]">
+                      <td className="px-4 py-3.5 whitespace-nowrap text-gray-700 text-xs font-medium">
                         {new Date(u.createdAt).toLocaleDateString('vi-VN')}
                       </td>
 
                       {/* Thao tác */}
-                      <td className="p-3.5 text-right whitespace-nowrap">
+                      <td className="px-4 py-3.5 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1.5">
                           {/* Sửa thông tin */}
                           <button
@@ -585,7 +577,7 @@ export const AdminUserManagementPage: React.FC<AdminUserManagementPageProps> = (
                   type="text"
                   disabled
                   value={selectedUser.username}
-                  className="w-full px-3 py-2 rounded-xl border border-gov-border bg-gray-100 text-gov-text-disabled font-mono text-xs cursor-not-allowed"
+                  className="w-full px-3 py-2 rounded-xl border border-gov-border bg-gray-100 text-gov-text-disabled text-xs cursor-not-allowed font-medium"
                 />
               </div>
 

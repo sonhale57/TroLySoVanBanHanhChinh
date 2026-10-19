@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -127,15 +128,13 @@ var app = builder.Build();
 // Configure Middleware Pipeline
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
-if (app.Environment.IsDevelopment() || true)
+// Swagger luôn bật để dễ kiểm tra (có thể giới hạn lại sau)
+app.UseSwagger();
+app.UseSwaggerUI(c =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI(c =>
-    {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "GovDocAssistant API v1");
-        c.RoutePrefix = "swagger";
-    });
-}
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "GovDocAssistant API v1");
+    c.RoutePrefix = "swagger";
+});
 
 app.UseCors("AllowAll");
 
@@ -146,6 +145,14 @@ app.MapControllers();
 
 // Health check endpoint
 app.MapGet("/health", () => Results.Ok(new { status = "Healthy", timestamp = DateTimeOffset.UtcNow, system = "Trợ lý số Văn bản Hành chính Công" }));
+
+// ─── Phục vụ React SPA (Frontend) ──────────────────────────────────────────
+// Serve file tĩnh từ thư mục wwwroot (index.html, assets, images…)
+app.UseDefaultFiles();   // Trỏ / → /index.html
+app.UseStaticFiles();    // Serve CSS, JS, fonts, ảnh…
+
+// SPA Fallback: mọi route không phải API → trả về index.html để React Router xử lý
+app.MapFallbackToFile("index.html");
 
 // Initialize & Seed Database automatically
 using (var scope = app.Services.CreateScope())

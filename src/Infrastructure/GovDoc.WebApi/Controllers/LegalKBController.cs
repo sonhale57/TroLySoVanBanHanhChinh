@@ -94,6 +94,59 @@ namespace GovDoc.WebApi.Controllers
             return Ok(docs);
         }
 
+        /// <summary>
+        /// Xem chi tiết văn bản pháp luật kèm toàn bộ điều khoản và quan hệ pháp lý
+        /// </summary>
+        [AllowAnonymous]
+        [HttpGet("documents/{id}")]
+        [HttpGet("{id}")]
+        public async Task<IActionResult> GetDocumentById(Guid id)
+        {
+            var doc = await _context.LegalDocuments
+                .Include(d => d.ClauseNodes)
+                .Include(d => d.SourceRelations)
+                .ThenInclude(r => r.TargetDoc)
+                .FirstOrDefaultAsync(d => d.Id == id);
+
+            if (doc == null)
+            {
+                return NotFound(new { message = "Không tìm thấy văn bản quy phạm pháp luật." });
+            }
+
+            return Ok(new
+            {
+                doc.Id,
+                doc.CodeNumber,
+                doc.Title,
+                doc.DocType,
+                doc.HierarchyRank,
+                doc.Issuer,
+                doc.IssuedDate,
+                doc.EffectiveDate,
+                doc.ExpiredDate,
+                doc.Status,
+                doc.IsDraft,
+                ClausesCount = doc.ClauseNodes.Count,
+                Clauses = doc.ClauseNodes.OrderBy(c => c.CreatedAt).Select(c => new
+                {
+                    c.Id,
+                    c.ArticleNumber,
+                    c.ClauseNumber,
+                    c.RawContent,
+                    c.Status
+                }),
+                Relations = doc.SourceRelations.Select(r => new
+                {
+                    r.Id,
+                    r.RelationType,
+                    r.AffectedClauses,
+                    r.LegalBasisClause,
+                    TargetCode = r.TargetDoc != null ? r.TargetDoc.CodeNumber : string.Empty,
+                    TargetTitle = r.TargetDoc != null ? r.TargetDoc.Title : string.Empty
+                })
+            });
+        }
+
         // ==========================================
         // PHASE 2: TỦ SÁCH PHÁP LUẬT QUẢN TRỊ TRỰC QUAN
         // ==========================================
@@ -157,7 +210,7 @@ namespace GovDoc.WebApi.Controllers
         }
 
         /// <summary>
-        /// Thêm thủ công văn bản biểu mẫu văn phòng 4 trường đơn giản
+        /// Thêm thủ công văn bản kèm điều khoản chi tiết
         /// </summary>
         [Authorize(Roles = UserRole.Admin)]
         [HttpPost("manual")]
@@ -190,14 +243,35 @@ namespace GovDoc.WebApi.Controllers
                 UpdatedAt = DateTimeOffset.UtcNow
             };
 
-            doc.ClauseNodes.Add(new LegalClauseNode
+            if (dto.Clauses != null && dto.Clauses.Any())
             {
-                Id = Guid.NewGuid(),
-                DocId = doc.Id,
-                ArticleNumber = "Quy định chung",
-                RawContent = dto.Notes ?? dto.Title,
-                Status = LegalStatus.Active
-            });
+                foreach (var c in dto.Clauses)
+                {
+                    if (string.IsNullOrWhiteSpace(c.ArticleNumber) && string.IsNullOrWhiteSpace(c.RawContent))
+                        continue;
+
+                    doc.ClauseNodes.Add(new LegalClauseNode
+                    {
+                        Id = Guid.NewGuid(),
+                        DocId = doc.Id,
+                        ArticleNumber = string.IsNullOrWhiteSpace(c.ArticleNumber) ? "Quy định" : c.ArticleNumber.Trim(),
+                        ClauseNumber = c.ClauseNumber?.Trim(),
+                        RawContent = c.RawContent.Trim(),
+                        Status = c.Status ?? LegalStatus.Active
+                    });
+                }
+            }
+            else
+            {
+                doc.ClauseNodes.Add(new LegalClauseNode
+                {
+                    Id = Guid.NewGuid(),
+                    DocId = doc.Id,
+                    ArticleNumber = "Quy định chung",
+                    RawContent = dto.Notes ?? dto.Title,
+                    Status = LegalStatus.Active
+                });
+            }
 
             await _context.LegalDocuments.AddAsync(doc);
             await _context.SaveChangesAsync();
@@ -206,13 +280,16 @@ namespace GovDoc.WebApi.Controllers
         }
 
         /// <summary>
-        /// Sửa thông tin văn bản
+        /// Sửa thông tin văn bản và toàn bộ điều khoản chi tiết
         /// </summary>
         [Authorize(Roles = UserRole.Admin)]
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateDoc(Guid id, [FromBody] UpdateLegalDocDto dto)
         {
-            var doc = await _context.LegalDocuments.FindAsync(id);
+            var doc = await _context.LegalDocuments
+                .Include(d => d.ClauseNodes)
+                .FirstOrDefaultAsync(d => d.Id == id);
+
             if (doc == null)
             {
                 return NotFound(new { message = "Không tìm thấy văn bản quy phạm pháp luật." });
@@ -228,8 +305,74 @@ namespace GovDoc.WebApi.Controllers
             doc.Status = dto.Status;
             doc.UpdatedAt = DateTimeOffset.UtcNow;
 
+            // Đồng bộ nội dung các Điều khoản (Clauses)
+            if (dto.Clauses != null)
+            {
+                var keptIds = new HashSet<Guid>();
+
+                foreach (var clauseDto in dto.Clauses)
+                {
+                    if (string.IsNullOrWhiteSpace(clauseDto.ArticleNumber) && string.IsNullOrWhiteSpace(clauseDto.RawContent))
+                        continue;
+
+                    if (clauseDto.Id.HasValue && clauseDto.Id.Value != Guid.Empty)
+                    {
+                        var existingNode = doc.ClauseNodes.FirstOrDefault(c => c.Id == clauseDto.Id.Value);
+                        if (existingNode != null)
+                        {
+                            existingNode.ArticleNumber = string.IsNullOrWhiteSpace(clauseDto.ArticleNumber) ? "Quy định" : clauseDto.ArticleNumber.Trim();
+                            existingNode.ClauseNumber = clauseDto.ClauseNumber?.Trim();
+                            existingNode.RawContent = clauseDto.RawContent.Trim();
+                            existingNode.Status = clauseDto.Status ?? LegalStatus.Active;
+                            keptIds.Add(existingNode.Id);
+                            continue;
+                        }
+                    }
+
+                    // Điều khoản mới thêm
+                    var newNode = new LegalClauseNode
+                    {
+                        Id = Guid.NewGuid(),
+                        DocId = doc.Id,
+                        ArticleNumber = string.IsNullOrWhiteSpace(clauseDto.ArticleNumber) ? "Quy định" : clauseDto.ArticleNumber.Trim(),
+                        ClauseNumber = clauseDto.ClauseNumber?.Trim(),
+                        RawContent = clauseDto.RawContent.Trim(),
+                        Status = clauseDto.Status ?? LegalStatus.Active
+                    };
+                    await _context.LegalClauseNodes.AddAsync(newNode);
+                    keptIds.Add(newNode.Id);
+                }
+
+                // Xóa các điều khoản cũ không còn trong danh sách gửi lên
+                var nodesToRemove = doc.ClauseNodes.Where(c => !keptIds.Contains(c.Id)).ToList();
+                if (nodesToRemove.Any())
+                {
+                    _context.LegalClauseNodes.RemoveRange(nodesToRemove);
+                }
+            }
+            else if (!string.IsNullOrWhiteSpace(dto.Notes))
+            {
+                if (!doc.ClauseNodes.Any())
+                {
+                    var fallbackNode = new LegalClauseNode
+                    {
+                        Id = Guid.NewGuid(),
+                        DocId = doc.Id,
+                        ArticleNumber = "Quy định chung",
+                        RawContent = dto.Notes.Trim(),
+                        Status = LegalStatus.Active
+                    };
+                    await _context.LegalClauseNodes.AddAsync(fallbackNode);
+                }
+                else
+                {
+                    var first = doc.ClauseNodes.First();
+                    first.RawContent = dto.Notes.Trim();
+                }
+            }
+
             await _context.SaveChangesAsync();
-            return Ok(new { message = "Cập nhật văn bản thành công." });
+            return Ok(new { message = "Cập nhật thông tin và điều khoản văn bản thành công." });
         }
 
         /// <summary>

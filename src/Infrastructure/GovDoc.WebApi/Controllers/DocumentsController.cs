@@ -435,24 +435,24 @@ namespace GovDoc.WebApi.Controllers
 
             var model = new OfficialDispatchDraftModel
             {
-                IssuerParent = request.IssuerParent ?? "ỦY BAN NHÂN DÂN TỈNH BÌNH DƯƠNG",
-                IssuerName = request.IssuerName ?? "VĂN PHÒNG",
-                DocCode = request.DocCode ?? "142/VP-KT",
-                Location = request.Location ?? "Bình Dương",
+                IssuerParent = !string.IsNullOrWhiteSpace(request.IssuerParent) ? request.IssuerParent : "ỦY BAN NHÂN DÂN",
+                IssuerName = !string.IsNullOrWhiteSpace(request.IssuerName) ? request.IssuerName : "VĂN PHÒNG",
+                DocCode = !string.IsNullOrWhiteSpace(request.DocCode) ? request.DocCode : "..../VP-UBND",
+                Location = !string.IsNullOrWhiteSpace(request.Location) ? request.Location : "Địa danh",
                 DocDateStr = DateTime.Now.ToString("dd 'tháng' MM 'năm' yyyy"),
                 SubjectTitle = subjectTitle,
-                RecipientMain = request.RecipientMain ?? "Cơ quan gửi công văn",
+                RecipientMain = !string.IsNullOrWhiteSpace(request.RecipientMain) ? request.RecipientMain : "Cơ quan gửi công văn",
                 LegalBases = legalBases,
                 ContentParagraphs = contentBullets,
                 RecipientsList = request.CustomRecipients ?? new List<string>
                 {
                     "Như trên",
-                    "Chủ tịch, các PCT UBND tỉnh",
-                    "UBND huyện sở tại",
-                    "Lưu: VT, KT."
+                    "Lãnh đạo cơ quan",
+                    "Đơn vị liên quan",
+                    "Lưu: VT."
                 },
-                SignerTitle = request.SignerTitle ?? "CHÁNH VĂN PHÒNG",
-                SignerName = request.SignerName ?? "Nguyễn Văn Hùng"
+                SignerTitle = !string.IsNullOrWhiteSpace(request.SignerTitle) ? request.SignerTitle : "CHÁNH VĂN PHÒNG",
+                SignerName = !string.IsNullOrWhiteSpace(request.SignerName) ? request.SignerName : string.Empty
             };
 
             // Sinh tệp docx chuẩn lề mm theo Nghị định 30

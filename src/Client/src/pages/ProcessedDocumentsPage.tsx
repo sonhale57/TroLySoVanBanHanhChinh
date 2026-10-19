@@ -98,17 +98,9 @@ export const ProcessedDocumentsPage: React.FC<ProcessedDocumentsPageProps> = ({
 
   return (
     <div className="max-w-[1920px] mx-auto p-4 sm:p-6 lg:p-8 space-y-5">
-      {/* Top Banner Tiêu đề & Nút Quay lại */}
+      {/* Top Banner Tiêu đề */}
       <div className="bg-white rounded-xl shadow-card border border-gov-border p-5 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={onBackToWorkspace}
-            className="p-1 rounded-lg hover:bg-gov-subtle text-gov-text-secondary hover:text-gov-text transition-colors"
-            title="Quay lại bàn làm việc"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
           <div className="w-10 h-10 rounded-xl bg-gov-primary-light/60 flex items-center justify-center text-gov-primary">
             <FileText className="w-5 h-5 text-gov-primary" />
           </div>
@@ -181,72 +173,72 @@ export const ProcessedDocumentsPage: React.FC<ProcessedDocumentsPageProps> = ({
             <table className="w-full text-left text-xs">
               <thead className="bg-gov-subtle text-gov-text font-bold uppercase text-[11px] border-b border-gov-border">
                 <tr>
-                  <th className="p-3.5">Số hiệu & Trích yếu</th>
-                  <th className="p-3.5">Cơ quan ban hành</th>
-                  <th className="p-3.5">Độ khẩn & Hạn SLA</th>
-                  <th className="p-3.5">Cán bộ xử lý</th>
-                  <th className="p-3.5">Phương án thẩm định</th>
-                  <th className="p-3.5">Thời gian tiếp nhận</th>
-                  <th className="p-3.5 text-right">Thao tác nghiệp vụ</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap min-w-[280px]">Số hiệu & Trích yếu</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap min-w-[180px]">Cơ quan ban hành</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap min-w-[130px] text-center">Độ khẩn & Hạn SLA</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap min-w-[150px]">Cán bộ xử lý</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap min-w-[130px] text-center">Phương án</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap min-w-[130px]">Thời gian tiếp nhận</th>
+                  <th className="px-4 py-3.5 text-right whitespace-nowrap min-w-[180px]">Thao tác nghiệp vụ</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gov-border">
                 {records.map((item) => (
                   <tr key={item.id} className="hover:bg-gov-bg/60 transition-colors">
                     {/* Số hiệu & Trích yếu */}
-                    <td className="p-3.5 max-w-xs">
-                      <div className="font-bold text-gov-primary flex items-center gap-1.5">
+                    <td className="px-4 py-3.5 min-w-[280px]">
+                      <div className="font-bold text-gov-primary flex items-center gap-1.5 flex-wrap">
                         <FileText className="w-3.5 h-3.5 text-gov-gold flex-shrink-0" />
-                        <span>{item.incomingDocCode || 'Chưa nhận diện'}</span>
+                        <span className="whitespace-nowrap">{item.incomingDocCode || 'Chưa nhận diện'}</span>
                       </div>
-                      <div className="text-[11px] text-gov-text-secondary mt-0.5 line-clamp-2" title={item.subjectTitle || item.originalFileName}>
+                      <div className="text-[11px] text-gov-text-secondary mt-1 line-clamp-2" title={item.subjectTitle || item.originalFileName}>
                         {item.subjectTitle || item.originalFileName}
                       </div>
                       {item.reprocessCount > 0 && (
-                        <span className="inline-block mt-1 text-[10px] px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 font-bold">
+                        <span className="inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-950 font-bold border border-amber-300 whitespace-nowrap">
                           Đã xử lý lại {item.reprocessCount} lần
                         </span>
                       )}
                     </td>
 
                     {/* Cơ quan ban hành */}
-                    <td className="p-3.5 whitespace-nowrap">
+                    <td className="px-4 py-3.5 whitespace-nowrap">
                       <div className="flex items-center gap-1.5 font-medium text-gov-text">
-                        <Building className="w-3.5 h-3.5 text-gov-text-disabled" />
-                        <span>{item.incomingIssuer || 'Đơn vị bên ngoài'}</span>
+                        <Building className="w-3.5 h-3.5 text-gov-text-disabled flex-shrink-0" />
+                        <span className="whitespace-nowrap">{item.incomingIssuer || 'Đơn vị bên ngoài'}</span>
                       </div>
-                      <div className="text-[10px] text-gov-text-disabled mt-0.5 truncate max-w-[150px]">
+                      <div className="text-[10px] text-gov-text-disabled mt-0.5 truncate max-w-[180px]">
                         Tệp: {item.originalFileName}
                       </div>
                     </td>
 
                     {/* Độ khẩn & Hạn SLA */}
-                    <td className="p-3.5 whitespace-nowrap">
+                    <td className="px-4 py-3.5 whitespace-nowrap text-center">
                       <div>
                         <span
-                          className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
+                          className={`inline-block px-2.5 py-1 rounded text-[11px] font-bold whitespace-nowrap ${
                             item.urgencyLevel === 'HỎA TỐC'
-                              ? 'bg-gov-danger-bg text-gov-danger border border-gov-danger-border'
+                              ? 'bg-red-100 text-red-950 border border-red-400'
                               : item.urgencyLevel === 'KHẨN'
-                              ? 'bg-gov-warning-bg text-gov-warning border border-gov-warning-border'
-                              : 'bg-gray-100 text-gray-700'
+                              ? 'bg-amber-100 text-amber-950 border border-amber-400'
+                              : 'bg-slate-100 text-slate-800 border border-slate-300'
                           }`}
                         >
                           {item.urgencyLevel}
                         </span>
                       </div>
                       {item.slaDeadline && (
-                        <div className="text-[11px] text-gov-danger font-medium mt-1 flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
+                        <div className="text-[11px] text-red-700 font-semibold mt-1 flex items-center justify-center gap-1 whitespace-nowrap">
+                          <Clock className="w-3.5 h-3.5 flex-shrink-0" />
                           <span>Hạn: {new Date(item.slaDeadline).toLocaleDateString('vi-VN')}</span>
                         </div>
                       )}
                     </td>
 
                     {/* Cán bộ xử lý */}
-                    <td className="p-3.5 whitespace-nowrap">
-                      <div className="font-bold text-gov-text flex items-center gap-1">
-                        <User className="w-3.5 h-3.5 text-gov-primary" />
+                    <td className="px-4 py-3.5 whitespace-nowrap">
+                      <div className="font-bold text-gov-text flex items-center gap-1.5">
+                        <User className="w-3.5 h-3.5 text-gov-primary flex-shrink-0" />
                         <span>{item.userName}</span>
                       </div>
                       <div className="text-[10px] text-gov-text-secondary mt-0.5">
@@ -255,25 +247,25 @@ export const ProcessedDocumentsPage: React.FC<ProcessedDocumentsPageProps> = ({
                     </td>
 
                     {/* Phương án thẩm định */}
-                    <td className="p-3.5 whitespace-nowrap">
-                      <span className="font-bold text-gov-active text-xs">
+                    <td className="px-4 py-3.5 whitespace-nowrap text-center">
+                      <span className="inline-block px-2.5 py-1 rounded bg-blue-50 text-blue-950 font-bold border border-blue-200 text-xs whitespace-nowrap">
                         {item.selectedOptionId}
                       </span>
                     </td>
 
                     {/* Thời gian */}
-                    <td className="p-3.5 whitespace-nowrap text-gov-text-secondary">
-                      <div className="flex items-center gap-1 text-[11px]">
-                        <Calendar className="w-3.5 h-3.5 text-gov-text-disabled" />
+                    <td className="px-4 py-3.5 whitespace-nowrap text-gov-text-secondary">
+                      <div className="flex items-center gap-1.5 text-[11px] text-gray-900 font-semibold">
+                        <Calendar className="w-3.5 h-3.5 text-gov-text-disabled flex-shrink-0" />
                         <span>{new Date(item.createdAt).toLocaleDateString('vi-VN')}</span>
                       </div>
-                      <div className="text-[10px] text-gov-text-disabled mt-0.5">
+                      <div className="text-[10px] text-gray-500 mt-0.5">
                         {new Date(item.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
                       </div>
                     </td>
 
                     {/* Nút thao tác */}
-                    <td className="p-3.5 text-right whitespace-nowrap">
+                    <td className="px-4 py-3.5 text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1.5">
                         {/* Nút Xem lại chi tiết */}
                         <button
@@ -355,7 +347,7 @@ export const ProcessedDocumentsPage: React.FC<ProcessedDocumentsPageProps> = ({
                 </div>
                 <div>
                   <span className="text-[11px] font-bold text-gov-text-secondary">Tên tệp gốc:</span>
-                  <div className="font-mono text-gov-text truncate">{selectedRecord.originalFileName}</div>
+                  <div className="text-gov-text truncate font-semibold">{selectedRecord.originalFileName}</div>
                 </div>
                 <div>
                   <span className="text-[11px] font-bold text-gov-text-secondary">Độ khẩn:</span>

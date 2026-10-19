@@ -4,6 +4,8 @@ using System.Threading.Tasks;
 using GovDoc.Domain.Entities;
 using GovDoc.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace GovDoc.Infrastructure.Persistence
 {
@@ -11,27 +13,249 @@ namespace GovDoc.Infrastructure.Persistence
     {
         public static async Task SeedAsync(ApplicationDbContext context)
         {
-            // Đảm bảo Database đã được tạo
-            await context.Database.EnsureCreatedAsync();
+            // 1. Tự động kiểm tra và khởi tạo Cơ sở dữ liệu nếu chưa tồn tại
+            try
+            {
+                var dbCreator = context.Database.GetService<IDatabaseCreator>() as RelationalDatabaseCreator;
+                if (dbCreator != null)
+                {
+                    if (!await dbCreator.ExistsAsync())
+                    {
+                        await dbCreator.CreateAsync();
+                    }
+                    if (!await dbCreator.HasTablesAsync())
+                    {
+                        await dbCreator.CreateTablesAsync();
+                    }
+                }
+            }
+            catch
+            {
+                try
+                {
+                    await context.Database.EnsureCreatedAsync();
+                }
+                catch
+                {
+                    // Tiếp tục chạy phần đồng bộ schema bảng và cột
+                }
+            }
 
-            // Đồng bộ schema cho bảng ProcessingLogs nếu thiếu các cột nâng cấp
+            // 2. Tự động kiểm tra thay đổi cấu trúc bảng & cột (Self-Migrating & Schema Sync)
             try
             {
                 await context.Database.ExecuteSqlRawAsync(@"
-                    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'SubjectTitle')
-                        ALTER TABLE ProcessingLogs ADD SubjectTitle NVARCHAR(500) NULL;
+                    -- Bảng Users
+                    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'Users')
+                    BEGIN
+                        CREATE TABLE [Users] (
+                            [Id] UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+                            [Username] NVARCHAR(50) NOT NULL,
+                            [PasswordHash] NVARCHAR(255) NOT NULL,
+                            [FullName] NVARCHAR(100) NOT NULL,
+                            [Role] NVARCHAR(20) NOT NULL DEFAULT 'USER',
+                            [Department] NVARCHAR(150) NOT NULL,
+                            [IsActive] BIT NOT NULL DEFAULT 1,
+                            [CreatedAt] DATETIMEOFFSET NOT NULL DEFAULT SYSDATETIMEOFFSET()
+                        );
+                        CREATE UNIQUE INDEX IX_Users_Username ON [Users]([Username]);
+                    END
 
-                    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'StoredFilePath')
-                        ALTER TABLE ProcessingLogs ADD StoredFilePath NVARCHAR(500) NULL;
+                    -- Bảng UserSessions
+                    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'UserSessions')
+                    BEGIN
+                        CREATE TABLE [UserSessions] (
+                            [Id] UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+                            [UserId] UNIQUEIDENTIFIER NOT NULL CONSTRAINT FK_UserSessions_Users FOREIGN KEY REFERENCES [Users]([Id]) ON DELETE CASCADE,
+                            [RefreshToken] NVARCHAR(255) NOT NULL,
+                            [IsPersistent] BIT NOT NULL DEFAULT 0,
+                            [ClientIp] NVARCHAR(100) NULL,
+                            [UserAgent] NVARCHAR(500) NULL,
+                            [ExpiresAt] DATETIMEOFFSET NOT NULL,
+                            [IsRevoked] BIT NOT NULL DEFAULT 0,
+                            [CreatedAt] DATETIMEOFFSET NOT NULL DEFAULT SYSDATETIMEOFFSET()
+                        );
+                        CREATE UNIQUE INDEX IX_UserSessions_RefreshToken ON [UserSessions]([RefreshToken]);
+                        CREATE INDEX IX_UserSessions_UserId ON [UserSessions]([UserId]);
+                    END
 
-                    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'ResultDataJson')
-                        ALTER TABLE ProcessingLogs ADD ResultDataJson NVARCHAR(MAX) NULL;
+                    -- Bảng LegalDocuments
+                    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'LegalDocuments')
+                    BEGIN
+                        CREATE TABLE [LegalDocuments] (
+                            [Id] UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+                            [CodeNumber] NVARCHAR(100) NOT NULL,
+                            [Title] NVARCHAR(MAX) NOT NULL,
+                            [DocType] NVARCHAR(50) NOT NULL,
+                            [HierarchyRank] INT NOT NULL DEFAULT 0,
+                            [Issuer] NVARCHAR(150) NOT NULL,
+                            [IssuedDate] DATETIME2 NOT NULL,
+                            [EffectiveDate] DATETIME2 NOT NULL,
+                            [ExpiredDate] DATETIME2 NULL,
+                            [Status] NVARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
+                            [IsDraft] BIT NOT NULL DEFAULT 0,
+                            [FilePath] NVARCHAR(500) NULL,
+                            [CreatedBy] UNIQUEIDENTIFIER NULL CONSTRAINT FK_LegalDocuments_Users FOREIGN KEY REFERENCES [Users]([Id]) ON DELETE SET NULL,
+                            [UpdatedAt] DATETIMEOFFSET NOT NULL DEFAULT SYSDATETIMEOFFSET(),
+                            [CreatedAt] DATETIMEOFFSET NOT NULL DEFAULT SYSDATETIMEOFFSET()
+                        );
+                        CREATE INDEX IX_LegalDocuments_CodeNumber ON [LegalDocuments]([CodeNumber]);
+                        CREATE INDEX IX_LegalDocuments_Status ON [LegalDocuments]([Status]);
+                        CREATE INDEX IX_LegalDocuments_Dates ON [LegalDocuments]([EffectiveDate], [ExpiredDate]);
+                    END
 
-                    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'ReprocessCount')
-                        ALTER TABLE ProcessingLogs ADD ReprocessCount INT NOT NULL CONSTRAINT DF_ProcessingLogs_ReprocessCount DEFAULT 0;
+                    -- Bảng LegalClauseNodes
+                    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'LegalClauseNodes')
+                    BEGIN
+                        CREATE TABLE [LegalClauseNodes] (
+                            [Id] UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+                            [DocId] UNIQUEIDENTIFIER NOT NULL CONSTRAINT FK_LegalClauseNodes_LegalDocuments FOREIGN KEY REFERENCES [LegalDocuments]([Id]) ON DELETE CASCADE,
+                            [ChapterTitle] NVARCHAR(200) NULL,
+                            [ArticleNumber] NVARCHAR(100) NOT NULL,
+                            [ClauseNumber] NVARCHAR(100) NULL,
+                            [PointIdentifier] NVARCHAR(50) NULL,
+                            [RawContent] NVARCHAR(MAX) NOT NULL,
+                            [Status] NVARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
+                            [CreatedAt] DATETIMEOFFSET NOT NULL DEFAULT SYSDATETIMEOFFSET()
+                        );
+                        CREATE INDEX IX_LegalClauseNodes_DocId ON [LegalClauseNodes]([DocId]);
+                        CREATE INDEX IX_LegalClauseNodes_ArticleNumber ON [LegalClauseNodes]([ArticleNumber]);
+                    END
 
-                    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'LastReprocessedAt')
-                        ALTER TABLE ProcessingLogs ADD LastReprocessedAt DATETIMEOFFSET NULL;
+                    -- Bảng LegalRelations
+                    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'LegalRelations')
+                    BEGIN
+                        CREATE TABLE [LegalRelations] (
+                            [Id] UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+                            [SourceDocId] UNIQUEIDENTIFIER NOT NULL CONSTRAINT FK_LegalRelations_SourceDoc FOREIGN KEY REFERENCES [LegalDocuments]([Id]) ON DELETE NO ACTION,
+                            [TargetDocId] UNIQUEIDENTIFIER NOT NULL CONSTRAINT FK_LegalRelations_TargetDoc FOREIGN KEY REFERENCES [LegalDocuments]([Id]) ON DELETE NO ACTION,
+                            [RelationType] NVARCHAR(50) NOT NULL,
+                            [AffectedClauses] NVARCHAR(500) NULL,
+                            [LegalBasisClause] NVARCHAR(MAX) NULL,
+                            [CreatedAt] DATETIMEOFFSET NOT NULL DEFAULT SYSDATETIMEOFFSET()
+                        );
+                        CREATE INDEX IX_LegalRelations_SourceDocId ON [LegalRelations]([SourceDocId]);
+                        CREATE INDEX IX_LegalRelations_TargetDocId ON [LegalRelations]([TargetDocId]);
+                    END
+
+                    -- Bảng ProcessingLogs
+                    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'ProcessingLogs')
+                    BEGIN
+                        CREATE TABLE [ProcessingLogs] (
+                            [Id] UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+                            [UserId] UNIQUEIDENTIFIER NOT NULL CONSTRAINT FK_ProcessingLogs_Users FOREIGN KEY REFERENCES [Users]([Id]) ON DELETE NO ACTION,
+                            [IncomingDocCode] NVARCHAR(100) NULL,
+                            [IncomingIssuer] NVARCHAR(150) NULL,
+                            [SubjectTitle] NVARCHAR(500) NULL,
+                            [OriginalFileName] NVARCHAR(255) NOT NULL,
+                            [StoredFilePath] NVARCHAR(500) NULL,
+                            [UrgencyLevel] NVARCHAR(50) NOT NULL DEFAULT 'THUONG',
+                            [SlaDeadline] DATETIMEOFFSET NULL,
+                            [SummaryDataJson] NVARCHAR(MAX) NOT NULL,
+                            [SelectedOptionId] NVARCHAR(50) NOT NULL,
+                            [LegalBasesUsedJson] NVARCHAR(MAX) NOT NULL,
+                            [ResultDataJson] NVARCHAR(MAX) NULL,
+                            [ExportedDocxPath] NVARCHAR(500) NULL,
+                            [ClientIp] NVARCHAR(100) NULL,
+                            [ReprocessCount] INT NOT NULL DEFAULT 0,
+                            [LastReprocessedAt] DATETIMEOFFSET NULL,
+                            [CreatedAt] DATETIMEOFFSET NOT NULL DEFAULT SYSDATETIMEOFFSET()
+                        );
+                        CREATE INDEX IX_ProcessingLogs_UserId ON [ProcessingLogs]([UserId]);
+                        CREATE INDEX IX_ProcessingLogs_CreatedAt ON [ProcessingLogs]([CreatedAt]);
+                    END
+
+                    -- Bảng LegalProposals
+                    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'LegalProposals')
+                    BEGIN
+                        CREATE TABLE [LegalProposals] (
+                            [Id] UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+                            [SubmittedBy] UNIQUEIDENTIFIER NOT NULL CONSTRAINT FK_LegalProposals_Submitter FOREIGN KEY REFERENCES [Users]([Id]) ON DELETE NO ACTION,
+                            [Title] NVARCHAR(255) NOT NULL,
+                            [Notes] NVARCHAR(MAX) NULL,
+                            [AttachmentPath] NVARCHAR(500) NOT NULL,
+                            [Status] NVARCHAR(30) NOT NULL DEFAULT 'PENDING',
+                            [AdminResponseNote] NVARCHAR(MAX) NULL,
+                            [ReviewedBy] UNIQUEIDENTIFIER NULL CONSTRAINT FK_LegalProposals_Reviewer FOREIGN KEY REFERENCES [Users]([Id]) ON DELETE SET NULL,
+                            [ReviewedAt] DATETIMEOFFSET NULL,
+                            [CreatedAt] DATETIMEOFFSET NOT NULL DEFAULT SYSDATETIMEOFFSET()
+                        );
+                        CREATE INDEX IX_LegalProposals_SubmittedBy ON [LegalProposals]([SubmittedBy]);
+                        CREATE INDEX IX_LegalProposals_Status ON [LegalProposals]([Status]);
+                    END
+
+                    -- Đồng bộ các cột bổ sung cho ProcessingLogs
+                    IF EXISTS (SELECT 1 FROM sys.tables WHERE name = 'ProcessingLogs')
+                    BEGIN
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'SubjectTitle')
+                            ALTER TABLE ProcessingLogs ADD SubjectTitle NVARCHAR(500) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'StoredFilePath')
+                            ALTER TABLE ProcessingLogs ADD StoredFilePath NVARCHAR(500) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'ResultDataJson')
+                            ALTER TABLE ProcessingLogs ADD ResultDataJson NVARCHAR(MAX) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'ReprocessCount')
+                            ALTER TABLE ProcessingLogs ADD ReprocessCount INT NOT NULL CONSTRAINT DF_ProcessingLogs_ReprocessCount DEFAULT 0;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'LastReprocessedAt')
+                            ALTER TABLE ProcessingLogs ADD LastReprocessedAt DATETIMEOFFSET NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'ExportedDocxPath')
+                            ALTER TABLE ProcessingLogs ADD ExportedDocxPath NVARCHAR(500) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'ClientIp')
+                            ALTER TABLE ProcessingLogs ADD ClientIp NVARCHAR(100) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'SlaDeadline')
+                            ALTER TABLE ProcessingLogs ADD SlaDeadline DATETIMEOFFSET NULL;
+                    END
+
+                    -- Đồng bộ các cột bổ sung cho LegalDocuments
+                    IF EXISTS (SELECT 1 FROM sys.tables WHERE name = 'LegalDocuments')
+                    BEGIN
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('LegalDocuments') AND name = 'IsDraft')
+                            ALTER TABLE LegalDocuments ADD IsDraft BIT NOT NULL CONSTRAINT DF_LegalDocuments_IsDraft DEFAULT 0;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('LegalDocuments') AND name = 'FilePath')
+                            ALTER TABLE LegalDocuments ADD FilePath NVARCHAR(500) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('LegalDocuments') AND name = 'CreatedBy')
+                            ALTER TABLE LegalDocuments ADD CreatedBy UNIQUEIDENTIFIER NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('LegalDocuments') AND name = 'UpdatedAt')
+                            ALTER TABLE LegalDocuments ADD UpdatedAt DATETIMEOFFSET NOT NULL CONSTRAINT DF_LegalDocuments_UpdatedAt DEFAULT SYSDATETIMEOFFSET();
+                    END
+
+                    -- Đồng bộ các cột bổ sung cho UserSessions
+                    IF EXISTS (SELECT 1 FROM sys.tables WHERE name = 'UserSessions')
+                    BEGIN
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('UserSessions') AND name = 'IsPersistent')
+                            ALTER TABLE UserSessions ADD IsPersistent BIT NOT NULL CONSTRAINT DF_UserSessions_IsPersistent DEFAULT 0;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('UserSessions') AND name = 'ClientIp')
+                            ALTER TABLE UserSessions ADD ClientIp NVARCHAR(100) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('UserSessions') AND name = 'UserAgent')
+                            ALTER TABLE UserSessions ADD UserAgent NVARCHAR(500) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('UserSessions') AND name = 'IsRevoked')
+                            ALTER TABLE UserSessions ADD IsRevoked BIT NOT NULL CONSTRAINT DF_UserSessions_IsRevoked DEFAULT 0;
+                    END
+
+                    -- Đồng bộ các cột bổ sung cho LegalProposals
+                    IF EXISTS (SELECT 1 FROM sys.tables WHERE name = 'LegalProposals')
+                    BEGIN
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('LegalProposals') AND name = 'AdminResponseNote')
+                            ALTER TABLE LegalProposals ADD AdminResponseNote NVARCHAR(MAX) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('LegalProposals') AND name = 'ReviewedBy')
+                            ALTER TABLE LegalProposals ADD ReviewedBy UNIQUEIDENTIFIER NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('LegalProposals') AND name = 'ReviewedAt')
+                            ALTER TABLE LegalProposals ADD ReviewedAt DATETIMEOFFSET NULL;
+                    END
                 ");
             }
             catch
@@ -39,32 +263,58 @@ namespace GovDoc.Infrastructure.Persistence
                 // Bỏ qua nếu môi trường in-memory hoặc không hỗ trợ ALTER TABLE
             }
 
-            // 1. Seed Users
-            if (!await context.Users.AnyAsync())
+            // 3. Khởi tạo tài khoản Quản trị viên (Admin) mặc định
+            var adminUser = await context.Users.FirstOrDefaultAsync(u => u.Username == "admin");
+            if (adminUser == null)
             {
-                var adminUser = new User
+                adminUser = new User
                 {
                     Id = Guid.Parse("11111111-1111-1111-1111-111111111111"),
                     Username = "admin",
                     PasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin@123"),
-                    FullName = "Nguyễn Văn Hùng",
+                    FullName = "Nguyễn Văn Hùng (Quản trị viên)",
                     Role = UserRole.Admin,
                     Department = "Sở Tư pháp / Phòng Pháp chế UBND Tỉnh",
                     IsActive = true
                 };
+                await context.Users.AddAsync(adminUser);
+                await context.SaveChangesAsync();
+            }
+            else
+            {
+                // Đảm bảo quyền Admin và trạng thái hoạt động luôn hợp lệ
+                bool needSave = false;
+                if (adminUser.Role != UserRole.Admin)
+                {
+                    adminUser.Role = UserRole.Admin;
+                    needSave = true;
+                }
+                if (!adminUser.IsActive)
+                {
+                    adminUser.IsActive = true;
+                    needSave = true;
+                }
+                if (needSave)
+                {
+                    await context.SaveChangesAsync();
+                }
+            }
 
-                var specialistUser = new User
+            // 4. Khởi tạo tài khoản Chuyên viên mặc định
+            var specialistUser = await context.Users.FirstOrDefaultAsync(u => u.Username == "chuyenvien");
+            if (specialistUser == null)
+            {
+                specialistUser = new User
                 {
                     Id = Guid.Parse("22222222-2222-2222-2222-222222222222"),
                     Username = "chuyenvien",
                     PasswordHash = BCrypt.Net.BCrypt.HashPassword("User@123"),
-                    FullName = "Trần Thị Mai",
+                    FullName = "Trần Thị Mai (Chuyên viên)",
                     Role = UserRole.User,
                     Department = "Văn phòng UBND Tỉnh / Bộ phận Tổng hợp",
                     IsActive = true
                 };
-
-                await context.Users.AddRangeAsync(adminUser, specialistUser);
+                await context.Users.AddAsync(specialistUser);
                 await context.SaveChangesAsync();
             }
 

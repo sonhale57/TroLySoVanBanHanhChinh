@@ -9,13 +9,15 @@ import {
   CheckCircle2,
   ArrowLeft,
   Loader2,
-  FileText
+  FileText,
+  Eye
 } from 'lucide-react';
 import { LegalDocumentItem } from '../types';
 import { api } from '../services/api';
 import { StatusBadge } from '../components/common/StatusBadge';
 import { QuickImportModal } from '../components/admin/QuickImportModal';
 import { LegalEditModal } from '../components/admin/LegalEditModal';
+import { LegalDetailModal } from '../components/admin/LegalDetailModal';
 
 interface AdminLegalKBPageProps {
   onBackToWorkspace: () => void;
@@ -29,6 +31,7 @@ export const AdminLegalKBPage: React.FC<AdminLegalKBPageProps> = ({ onBackToWork
   const [isQuickImportOpen, setIsQuickImportOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingDoc, setEditingDoc] = useState<LegalDocumentItem | null>(null);
+  const [viewingDoc, setViewingDoc] = useState<LegalDocumentItem | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
 
   useEffect(() => {
@@ -81,20 +84,12 @@ export const AdminLegalKBPage: React.FC<AdminLegalKBPageProps> = ({ onBackToWork
       <div className="bg-white rounded-xl shadow-card border border-gov-border p-5 flex flex-wrap items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onBackToWorkspace}
-              className="p-1 rounded-lg hover:bg-gov-subtle text-gov-text-secondary hover:text-gov-text mr-1"
-              title="Quay lại bàn làm việc"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
             <BookMarked className="w-5 h-5 text-gov-primary" />
             <h2 className="text-base font-bold uppercase tracking-wider text-gov-text">
               Quản trị Tủ sách Pháp luật
             </h2>
           </div>
-          <p className="text-xs text-gov-text-secondary mt-1 ml-8">
+          <p className="text-xs text-gov-text-secondary mt-1">
             Thao tác văn phòng trực quan: Kéo thả import 1-chạm tự nhận diện thay thế, chỉnh sửa nội dung và cập nhật trạng thái trong nút Sửa.
           </p>
         </div>
@@ -194,55 +189,75 @@ export const AdminLegalKBPage: React.FC<AdminLegalKBPageProps> = ({ onBackToWork
             <table className="w-full text-left text-xs border-collapse">
               <thead className="bg-gov-subtle text-gov-text font-bold uppercase text-[11px] border-b border-gov-border">
                 <tr>
-                  <th className="p-3">Số ký hiệu</th>
-                  <th className="p-3">Trích yếu nội dung văn bản</th>
-                  <th className="p-3">Cơ quan / Loại</th>
-                  <th className="p-3">Ngày hiệu lực</th>
-                  <th className="p-3">Trạng thái</th>
-                  <th className="p-3 text-right">Thao tác cán bộ</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap min-w-[140px]">Số ký hiệu</th>
+                  <th className="px-4 py-3.5 min-w-[280px]">Trích yếu nội dung văn bản</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap min-w-[180px]">Cơ quan / Loại</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap min-w-[120px]">Ngày hiệu lực</th>
+                  <th className="px-4 py-3.5 whitespace-nowrap min-w-[150px] text-center">Trạng thái</th>
+                  <th className="px-4 py-3.5 text-right whitespace-nowrap min-w-[220px]">Thao tác cán bộ</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gov-border">
                 {filteredDocs.map((doc) => (
                   <tr key={doc.id} className="hover:bg-gov-bg/60 transition-colors">
-                    <td className="p-3 whitespace-nowrap">
-                      <span className="font-bold text-gov-primary bg-gov-subtle px-2 py-0.5 rounded text-xs">
+                    <td className="px-4 py-3.5 whitespace-nowrap">
+                      <button
+                        type="button"
+                        onClick={() => setViewingDoc(doc)}
+                        className="font-bold text-gov-primary bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded text-xs border border-blue-200 whitespace-nowrap transition-colors"
+                        title="Bấm để xem toàn văn nội dung & các điều khoản thi hành"
+                      >
                         {doc.codeNumber}
-                      </span>
+                      </button>
                     </td>
-                    <td className="p-3">
-                      <div className="font-semibold text-gov-text max-w-md line-clamp-2">
+                    <td className="px-4 py-3.5">
+                      <div 
+                        onClick={() => setViewingDoc(doc)}
+                        className="font-semibold text-gov-text max-w-md line-clamp-2 hover:text-gov-primary cursor-pointer transition-colors"
+                        title="Bấm để xem chi tiết toàn văn văn bản"
+                      >
                         {doc.title}
                       </div>
                       {doc.relations && doc.relations.length > 0 && (
-                        <div className="text-[10px] text-gov-danger font-medium mt-0.5">
+                        <div className="text-[11px] text-red-700 font-bold mt-1 whitespace-nowrap">
                           ↳ Thay thế: {doc.relations.map((r) => r.targetCode).join(', ')}
                         </div>
                       )}
                     </td>
-                    <td className="p-3 whitespace-nowrap">
+                    <td className="px-4 py-3.5 whitespace-nowrap">
                       <div className="font-medium text-gov-text">{doc.issuer}</div>
                       <div className="text-[11px] text-gov-text-secondary">{doc.docType}</div>
                     </td>
-                    <td className="p-3 whitespace-nowrap font-medium text-gov-text">
+                    <td className="px-4 py-3.5 whitespace-nowrap font-medium text-gov-text">
                       {new Date(doc.effectiveDate).toLocaleDateString('vi-VN')}
                     </td>
-                    <td className="p-3 whitespace-nowrap">
+                    <td className="px-4 py-3.5 whitespace-nowrap text-center">
                       <StatusBadge status={doc.status} size="sm" />
                     </td>
-                    <td className="p-3 whitespace-nowrap text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        {/* Edit Button: Opens Edit Modal where Status can be safely changed */}
+                    <td className="px-4 py-3.5 whitespace-nowrap text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        {/* Nút Xem chi tiết: Hiển thị toàn văn & danh mục điều khoản */}
+                        <button
+                          type="button"
+                          onClick={() => setViewingDoc(doc)}
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-300 font-bold text-xs transition-colors shadow-sm whitespace-nowrap"
+                          title="Xem toàn văn nội dung và các điều khoản thi hành"
+                        >
+                          <Eye className="w-3.5 h-3.5 text-blue-700 flex-shrink-0" />
+                          <span>Chi tiết</span>
+                        </button>
+
+                        {/* Edit Button: Opens Edit Modal where Metadata & Clauses can be edited */}
                         <button
                           type="button"
                           onClick={() => {
                             setEditingDoc(doc);
                             setIsEditModalOpen(true);
                           }}
-                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-gov-subtle hover:bg-white text-gov-text hover:text-gov-primary border border-gov-border hover:border-gov-primary font-bold text-xs transition-colors shadow-sm"
-                          title="Sửa thông tin văn bản & cập nhật trạng thái hiệu lực"
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-gov-subtle hover:bg-white text-gov-text hover:text-gov-primary border border-gov-border hover:border-gov-primary font-bold text-xs transition-colors shadow-sm whitespace-nowrap"
+                          title="Sửa thông tin văn bản & nội dung từng điều khoản"
                         >
-                          <Edit3 className="w-3.5 h-3.5 text-gov-gold" />
+                          <Edit3 className="w-3.5 h-3.5 text-gov-gold flex-shrink-0" />
                           <span>Sửa</span>
                         </button>
 
@@ -250,10 +265,10 @@ export const AdminLegalKBPage: React.FC<AdminLegalKBPageProps> = ({ onBackToWork
                         <button
                           type="button"
                           onClick={() => handleDelete(doc)}
-                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg hover:bg-gov-danger-bg text-gov-text-secondary hover:text-gov-danger border border-transparent hover:border-gov-danger-border font-bold text-xs transition-colors"
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg hover:bg-gov-danger-bg text-gov-text-secondary hover:text-gov-danger border border-transparent hover:border-gov-danger-border font-bold text-xs transition-colors whitespace-nowrap"
                           title="Xóa văn bản"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 className="w-3.5 h-3.5 flex-shrink-0" />
                           <span>Xóa</span>
                         </button>
                       </div>
@@ -266,6 +281,17 @@ export const AdminLegalKBPage: React.FC<AdminLegalKBPageProps> = ({ onBackToWork
         )}
       </div>
 
+      {/* Chi tiết văn bản pháp luật & Điều khoản Modal */}
+      <LegalDetailModal
+        isOpen={!!viewingDoc}
+        onClose={() => setViewingDoc(null)}
+        document={viewingDoc}
+        onOpenEdit={(doc) => {
+          setEditingDoc(doc);
+          setIsEditModalOpen(true);
+        }}
+      />
+
       {/* Quick Import Modal */}
       <QuickImportModal
         isOpen={isQuickImportOpen}
@@ -276,13 +302,13 @@ export const AdminLegalKBPage: React.FC<AdminLegalKBPageProps> = ({ onBackToWork
         }}
       />
 
-      {/* Manual Add / Edit Modal (Status is updated here) */}
+      {/* Manual Add / Edit Modal (Hỗ trợ sửa chi tiết nội dung từng Điều khoản) */}
       <LegalEditModal
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
         documentToEdit={editingDoc}
         onSuccess={() => {
-          setNotification(editingDoc ? 'Đã cập nhật thông tin và trạng thái văn bản thành công.' : 'Đã thêm văn bản mới vào Tủ sách thành công.');
+          setNotification(editingDoc ? 'Đã cập nhật thông tin và toàn bộ nội dung điều khoản văn bản thành công.' : 'Đã thêm văn bản mới vào Tủ sách thành công.');
           loadDocuments();
         }}
       />

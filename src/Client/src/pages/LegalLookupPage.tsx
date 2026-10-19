@@ -50,14 +50,6 @@ export const LegalLookupPage: React.FC<LegalLookupPageProps> = ({ onBackToWorksp
       {/* Top Banner */}
       <div className="bg-white rounded-xl shadow-card border border-gov-border p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={onBackToWorkspace}
-            className="p-1 rounded-lg hover:bg-gov-subtle text-gov-text-secondary hover:text-gov-text"
-            title="Quay lại bàn làm việc"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
           <div>
             <div className="flex items-center gap-2">
               <BookOpen className="w-5 h-5 text-gov-gold" />
