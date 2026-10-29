@@ -49,12 +49,44 @@ namespace GovDoc.WebApi.Controllers
 
         [AllowAnonymous]
         [HttpGet("documents")]
-        public async Task<IActionResult> GetAllDocuments()
+        public async Task<IActionResult> GetAllDocuments(
+            [FromQuery] string? search = null,
+            [FromQuery] string? fieldCategory = null,
+            [FromQuery] string? documentScope = null,
+            [FromQuery] string? issuerAgency = null)
         {
-            var docs = await _context.LegalDocuments
+            var query = _context.LegalDocuments
                 .Include(d => d.ClauseNodes)
                 .Include(d => d.SourceRelations)
                 .ThenInclude(r => r.TargetDoc)
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(fieldCategory) && fieldCategory != "ALL")
+            {
+                query = query.Where(d => d.FieldCategory == fieldCategory);
+            }
+
+            if (!string.IsNullOrWhiteSpace(documentScope) && documentScope != "ALL")
+            {
+                query = query.Where(d => d.DocumentScope == documentScope);
+            }
+
+            if (!string.IsNullOrWhiteSpace(issuerAgency) && issuerAgency != "ALL")
+            {
+                var agencyTerm = issuerAgency.Trim().ToLower();
+                query = query.Where(d => d.Issuer.ToLower().Contains(agencyTerm) || (d.IssuerAgency != null && d.IssuerAgency.ToLower().Contains(agencyTerm)));
+            }
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var term = search.Trim().ToLower();
+                query = query.Where(d =>
+                    d.CodeNumber.ToLower().Contains(term) ||
+                    d.Title.ToLower().Contains(term) ||
+                    d.Issuer.ToLower().Contains(term));
+            }
+
+            var docs = await query
                 .OrderByDescending(d => d.HierarchyRank)
                 .ThenByDescending(d => d.IssuedDate)
                 .Select(d => new
@@ -65,6 +97,9 @@ namespace GovDoc.WebApi.Controllers
                     d.DocType,
                     d.HierarchyRank,
                     d.Issuer,
+                    d.IssuerAgency,
+                    d.DocumentScope,
+                    d.FieldCategory,
                     d.IssuedDate,
                     d.EffectiveDate,
                     d.ExpiredDate,
@@ -233,6 +268,9 @@ namespace GovDoc.WebApi.Controllers
                 DocType = dto.DocType,
                 HierarchyRank = rank,
                 Issuer = dto.Issuer,
+                IssuerAgency = !string.IsNullOrWhiteSpace(dto.IssuerAgency) ? dto.IssuerAgency.Trim() : dto.Issuer,
+                DocumentScope = !string.IsNullOrWhiteSpace(dto.DocumentScope) ? dto.DocumentScope : DocumentScope.QPPL,
+                FieldCategory = !string.IsNullOrWhiteSpace(dto.FieldCategory) ? dto.FieldCategory : FieldCategory.QuanTriVanPhong,
                 IssuedDate = dto.EffectiveDate.AddDays(-15),
                 EffectiveDate = dto.EffectiveDate,
                 ExpiredDate = dto.ExpiredDate,
@@ -420,15 +458,13 @@ namespace GovDoc.WebApi.Controllers
         }
 
         /// <summary>
-        /// Xóa văn bản (với xác nhận)
+        /// Xóa văn bản pháp luật với cơ chế kiểm tra khóa ngoại 2 cấp (Smart Cascade Deletion)
         /// </summary>
         [Authorize(Roles = UserRole.Admin)]
         [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteDoc(Guid id)
+        public async Task<IActionResult> DeleteDoc(Guid id, [FromQuery] bool forceCascade = false)
         {
             var doc = await _context.LegalDocuments
-                .Include(d => d.SourceRelations)
-                .Include(d => d.TargetRelations)
                 .FirstOrDefaultAsync(d => d.Id == id);
 
             if (doc == null)
@@ -436,12 +472,68 @@ namespace GovDoc.WebApi.Controllers
                 return NotFound(new { message = "Không tìm thấy văn bản quy phạm pháp luật." });
             }
 
-            _context.LegalRelations.RemoveRange(doc.SourceRelations);
-            _context.LegalRelations.RemoveRange(doc.TargetRelations);
-            _context.LegalDocuments.Remove(doc);
+            // Kiểm tra các bảng khóa ngoại phụ thuộc
+            int clauseCount = await _context.LegalClauseNodes.CountAsync(c => c.DocId == id);
+            int relationCount = await _context.LegalRelations.CountAsync(r => r.SourceDocId == id || r.TargetDocId == id);
 
+            bool hasForeignKeys = (clauseCount > 0 || relationCount > 0);
+
+            if (hasForeignKeys && !forceCascade)
+            {
+                var deps = new List<ForeignKeyDependencyDto>();
+                if (clauseCount > 0)
+                {
+                    deps.Add(new ForeignKeyDependencyDto
+                    {
+                        TableName = "LegalClauseNodes",
+                        Label = "Điều khoản pháp luật",
+                        Count = clauseCount
+                    });
+                }
+                if (relationCount > 0)
+                {
+                    deps.Add(new ForeignKeyDependencyDto
+                    {
+                        TableName = "LegalRelations",
+                        Label = "Quan hệ liên kết văn bản pháp luật",
+                        Count = relationCount
+                    });
+                }
+
+                return StatusCode(StatusCodes.Status409Conflict, new DeleteImpactResultDto
+                {
+                    HasForeignKeys = true,
+                    RequiresCascadeConfirmation = true,
+                    Message = $"Văn bản \"{doc.CodeNumber}\" đang có dữ liệu khóa ngoại tại các bảng liên quan.",
+                    Dependencies = deps
+                });
+            }
+
+            // Nếu không có khóa ngoại hoặc cán bộ đã xác nhận lần 2 để dọn sạch dữ liệu
+            var relations = await _context.LegalRelations
+                .Where(r => r.SourceDocId == id || r.TargetDocId == id)
+                .ToListAsync();
+            if (relations.Count > 0)
+            {
+                _context.LegalRelations.RemoveRange(relations);
+            }
+
+            var clauses = await _context.LegalClauseNodes
+                .Where(c => c.DocId == id)
+                .ToListAsync();
+            if (clauses.Count > 0)
+            {
+                _context.LegalClauseNodes.RemoveRange(clauses);
+            }
+
+            _context.LegalDocuments.Remove(doc);
             await _context.SaveChangesAsync();
-            return Ok(new { message = $"Đã xóa văn bản {doc.CodeNumber} khỏi Tủ sách pháp lý." });
+
+            string successMsg = forceCascade
+                ? $"Đã dọn sạch {clauses.Count} điều khoản, {relations.Count} mối liên kết và xóa vĩnh viễn văn bản {doc.CodeNumber}."
+                : $"Đã xóa văn bản {doc.CodeNumber} khỏi Tủ sách pháp lý.";
+
+            return Ok(new { message = successMsg });
         }
 
         // ==========================================
@@ -590,6 +682,48 @@ namespace GovDoc.WebApi.Controllers
 
             await _context.SaveChangesAsync();
             return Ok(new { message = $"Đã cập nhật trạng thái đề xuất thành: {proposal.Status}." });
+        }
+
+        /// <summary>
+        /// Xóa đề xuất cập nhật văn bản pháp luật
+        /// </summary>
+        [Authorize]
+        [HttpDelete("proposals/{id}")]
+        public async Task<IActionResult> DeleteProposal(Guid id, [FromQuery] bool forceCascade = false)
+        {
+            var proposal = await _context.LegalProposals.FindAsync(id);
+            if (proposal == null)
+            {
+                return NotFound(new { message = "Không tìm thấy đề xuất pháp lý." });
+            }
+
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var roleClaim = User.FindFirst(ClaimTypes.Role)?.Value;
+            bool isAdmin = string.Equals(roleClaim, "ADMIN", StringComparison.OrdinalIgnoreCase);
+            Guid currentUserId = Guid.TryParse(userIdClaim, out var parsedGuid) ? parsedGuid : Guid.Empty;
+
+            if (!isAdmin && proposal.SubmittedBy != currentUserId)
+            {
+                return Forbid();
+            }
+
+            // Kiểm tra tệp đính kèm vật lý nếu có
+            if (!string.IsNullOrWhiteSpace(proposal.AttachmentPath) && System.IO.File.Exists(proposal.AttachmentPath))
+            {
+                try
+                {
+                    System.IO.File.Delete(proposal.AttachmentPath);
+                }
+                catch
+                {
+                    // Tiếp tục xóa bản ghi trong cơ sở dữ liệu
+                }
+            }
+
+            _context.LegalProposals.Remove(proposal);
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = $"Đã xóa đề xuất \"{proposal.Title}\" thành công." });
         }
     }
 

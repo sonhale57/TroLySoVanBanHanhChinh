@@ -43,7 +43,7 @@ namespace GovDoc.Infrastructure.Identity
             var tokenDescriptor = new SecurityTokenDescriptor
             {
                 Subject = new ClaimsIdentity(claims),
-                Expires = DateTime.UtcNow.AddHours(8), // 8 giờ phiên làm việc
+                Expires = DateTime.UtcNow.AddDays(30), // 30 ngày duy trì phiên làm việc cán bộ
                 Issuer = _issuer,
                 Audience = _audience,
                 SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)

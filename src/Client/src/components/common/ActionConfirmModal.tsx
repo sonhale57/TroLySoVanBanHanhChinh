@@ -53,7 +53,7 @@ export const ActionConfirmModal: React.FC<ActionConfirmModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 !m-0 z-50 overflow-y-auto w-full h-full min-h-screen flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-gov-border overflow-hidden transform transition-all animate-in zoom-in-95 duration-200">
         {/* Header Strip */}
         <div className="px-5 py-4 bg-gov-subtle/70 border-b border-gov-border flex items-center justify-between">

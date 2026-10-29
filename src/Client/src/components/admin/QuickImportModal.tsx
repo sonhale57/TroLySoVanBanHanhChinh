@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { UploadCloud, X, CheckCircle2, AlertTriangle, FileText, ArrowRight, Loader2, Sparkles } from 'lucide-react';
+import { UploadCloud, X, CheckCircle2, AlertTriangle, FileText, ArrowRight, Loader2 } from 'lucide-react';
 import { api } from '../../services/api';
 
 interface QuickImportModalProps {
@@ -136,7 +136,7 @@ export const QuickImportModal: React.FC<QuickImportModalProps> = ({
             <div className="space-y-4 animate-in fade-in">
               <div className="p-4 rounded-xl bg-gov-subtle/70 border border-gov-border">
                 <div className="flex items-center gap-2 text-xs font-bold text-gov-primary uppercase mb-2">
-                  <Sparkles className="w-4 h-4 text-gov-gold" />
+                  <FileText className="w-4 h-4 text-gov-gold" />
                   Kết quả nhận diện tự động từ tệp tin
                 </div>
 

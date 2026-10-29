@@ -1,0 +1,24 @@
+{
+  "short_name": "Trợ lý số",
+  "name": "Trợ lý số Văn bản Công vụ - Giám sát & Báo cáo Nhanh",
+  "description": "Ứng dụng trợ lý số hỗ trợ cán bộ theo dõi báo cáo nhanh, nhắc việc, cảnh báo SLA và nhận thông báo công văn khẩn cấp thời gian thực",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#BA1C1D",
+  "theme_color": "#BA1C1D",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "48x48 72x72 96x96 128x128 256x256",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/images/quochuy.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

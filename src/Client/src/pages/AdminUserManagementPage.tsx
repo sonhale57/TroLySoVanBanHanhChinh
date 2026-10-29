@@ -15,8 +15,10 @@ import {
   ArrowLeft,
   X,
   Mail,
-  Building
+  Building,
+  Trash2
 } from 'lucide-react';
+import { SmartDeleteConfirmModal } from '../components/common/SmartDeleteConfirmModal';
 import { ManagedUserItem, CreateUserPayload, UpdateUserPayload } from '../types';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -66,6 +68,7 @@ export const AdminUserManagementPage: React.FC<AdminUserManagementPageProps> = (
 
   // Confirm Toggle Status Modal
   const [toggleStatusUser, setToggleStatusUser] = useState<ManagedUserItem | null>(null);
+  const [deleteTargetUser, setDeleteTargetUser] = useState<ManagedUserItem | null>(null);
 
   useEffect(() => {
     loadUsers();
@@ -166,6 +169,27 @@ export const AdminUserManagementPage: React.FC<AdminUserManagementPageProps> = (
     }
   };
 
+  const handleExecuteDeleteUser = async (forceCascade: boolean) => {
+    if (!deleteTargetUser) return { success: false };
+    try {
+      const res = await api.deleteUser(deleteTargetUser.id, forceCascade);
+      setNotification(res.message || `Đã xóa tài khoản ${deleteTargetUser.fullName} thành công.`);
+      setDeleteTargetUser(null);
+      await loadUsers(search);
+      return { success: true };
+    } catch (err: any) {
+      if (err?.response?.status === 409 && err?.response?.data?.requiresCascadeConfirmation) {
+        return {
+          success: false,
+          requiresCascade: true,
+          dependencies: err.response.data.dependencies,
+          message: err.response.data.message,
+        };
+      }
+      throw err;
+    }
+  };
+
   const handleToggleStatusConfirm = async () => {
     if (!toggleStatusUser) return;
     const target = toggleStatusUser;
@@ -194,9 +218,6 @@ export const AdminUserManagementPage: React.FC<AdminUserManagementPageProps> = (
               <h2 className="text-base font-bold uppercase tracking-wider text-gov-text">
                 Quản Trị Tài Khoản Cán Bộ & Phân Quyền
               </h2>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-gov-danger-bg text-gov-danger font-black border border-gov-danger-border">
-                Chỉ dành cho Lãnh đạo
-              </span>
             </div>
             <p className="text-xs text-gov-text-secondary mt-0.5">
               Cấp tài khoản chuyên viên hoặc quản lý trưởng phòng, khóa/kích hoạt và quản lý định danh công vụ
@@ -290,7 +311,7 @@ export const AdminUserManagementPage: React.FC<AdminUserManagementPageProps> = (
                             <div className="font-bold text-gov-text flex items-center gap-1.5 flex-wrap">
                               <span>{u.fullName}</span>
                               {isCurrent && (
-                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-gov-gold text-gov-text font-black whitespace-nowrap shadow-sm">
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-gov-gold text-white font-black whitespace-nowrap shadow-sm">
                                   Tôi
                                 </span>
                               )}
@@ -305,11 +326,10 @@ export const AdminUserManagementPage: React.FC<AdminUserManagementPageProps> = (
                       {/* Vai trò */}
                       <td className="px-4 py-3.5 whitespace-nowrap">
                         <span
-                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap ${
-                            u.role === 'ADMIN'
-                              ? 'bg-blue-100 text-blue-950 border border-blue-300'
-                              : 'bg-slate-100 text-slate-800 border border-slate-300'
-                          }`}
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap ${u.role === 'ADMIN'
+                            ? 'bg-blue-100 text-blue-950 border border-blue-300'
+                            : 'bg-slate-100 text-slate-800 border border-slate-300'
+                            }`}
                         >
                           {u.role === 'ADMIN' ? (
                             <>
@@ -348,11 +368,10 @@ export const AdminUserManagementPage: React.FC<AdminUserManagementPageProps> = (
                       {/* Trạng thái */}
                       <td className="px-4 py-3.5 whitespace-nowrap text-center">
                         <span
-                          className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-bold whitespace-nowrap shadow-sm ${
-                            u.isActive
-                              ? 'bg-emerald-100 text-emerald-950 border border-emerald-400'
-                              : 'bg-red-100 text-red-950 border border-red-400'
-                          }`}
+                          className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-bold whitespace-nowrap shadow-sm ${u.isActive
+                            ? 'bg-emerald-100 text-emerald-950 border border-emerald-400'
+                            : 'bg-red-100 text-red-950 border border-red-400'
+                            }`}
                         >
                           {u.isActive ? 'Đang hoạt động' : 'Tạm khóa'}
                         </span>
@@ -391,17 +410,16 @@ export const AdminUserManagementPage: React.FC<AdminUserManagementPageProps> = (
                             type="button"
                             disabled={isCurrent}
                             onClick={() => setToggleStatusUser(u)}
-                            className={`p-1.5 rounded-lg border border-gov-border transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
-                              u.isActive
-                                ? 'bg-white hover:bg-gov-danger-bg text-gov-danger'
-                                : 'bg-white hover:bg-gov-active-bg text-gov-active'
-                            }`}
+                            className={`p-1.5 rounded-lg border border-gov-border transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${u.isActive
+                              ? 'bg-white hover:bg-gov-danger-bg text-gov-danger'
+                              : 'bg-white hover:bg-gov-active-bg text-gov-active'
+                              }`}
                             title={
                               isCurrent
                                 ? 'Không thể khóa tài khoản của chính mình'
                                 : u.isActive
-                                ? 'Khóa tài khoản cán bộ'
-                                : 'Mở khóa tài khoản cán bộ'
+                                  ? 'Khóa tài khoản cán bộ'
+                                  : 'Mở khóa tài khoản cán bộ'
                             }
                           >
                             {u.isActive ? (
@@ -409,6 +427,23 @@ export const AdminUserManagementPage: React.FC<AdminUserManagementPageProps> = (
                             ) : (
                               <Unlock className="w-3.5 h-3.5" />
                             )}
+                          </button>
+
+                          {/* Xóa Cán bộ (Kiểm tra khóa ngoại 2 cấp) */}
+                          <button
+                            type="button"
+                            disabled={isCurrent || u.username.toLowerCase() === 'admin'}
+                            onClick={() => setDeleteTargetUser(u)}
+                            className="p-1.5 rounded-lg border border-gov-border bg-white hover:bg-gov-danger-bg text-gov-danger transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                            title={
+                              isCurrent
+                                ? 'Không thể tự xóa tài khoản của chính mình'
+                                : u.username.toLowerCase() === 'admin'
+                                  ? 'Không thể xóa tài khoản Quản trị viên hệ thống mặc định'
+                                  : 'Xóa tài khoản cán bộ'
+                            }
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </td>
@@ -423,7 +458,7 @@ export const AdminUserManagementPage: React.FC<AdminUserManagementPageProps> = (
 
       {/* Modal Cấp mới tài khoản Cán bộ */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in">
+        <div className="fixed inset-0 !m-0 z-50 overflow-y-auto w-full h-full min-h-screen flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in">
           <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-gov-border overflow-hidden">
             <div className="px-6 py-4 bg-gov-primary text-white flex items-center justify-between border-b-2 border-gov-gold">
               <div className="flex items-center gap-2">
@@ -550,7 +585,7 @@ export const AdminUserManagementPage: React.FC<AdminUserManagementPageProps> = (
 
       {/* Modal Sửa thông tin cán bộ */}
       {isEditModalOpen && selectedUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in">
+        <div className="fixed inset-0 !m-0 z-50 overflow-y-auto w-full h-full min-h-screen flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in">
           <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-gov-border overflow-hidden">
             <div className="px-6 py-4 bg-gov-primary text-white flex items-center justify-between border-b-2 border-gov-gold">
               <div className="flex items-center gap-2">
@@ -672,7 +707,7 @@ export const AdminUserManagementPage: React.FC<AdminUserManagementPageProps> = (
 
       {/* Modal Đặt lại Mật khẩu */}
       {isResetPassModalOpen && selectedUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in">
+        <div className="fixed inset-0 !m-0 z-50 overflow-y-auto w-full h-full min-h-screen flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in">
           <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-gov-border overflow-hidden">
             <div className="px-6 py-4 bg-gov-primary text-white flex items-center justify-between border-b-2 border-gov-gold">
               <div className="flex items-center gap-2">
@@ -733,6 +768,16 @@ export const AdminUserManagementPage: React.FC<AdminUserManagementPageProps> = (
       )}
 
       {/* Confirm Khóa/Mở khóa tài khoản */}
+      {/* Smart Delete Modal cho Cán bộ (Kiểm tra khóa ngoại 2 cấp) */}
+      <SmartDeleteConfirmModal
+        isOpen={!!deleteTargetUser}
+        onClose={() => setDeleteTargetUser(null)}
+        onConfirm={handleExecuteDeleteUser}
+        title="Xác nhận xóa tài khoản cán bộ"
+        itemName={deleteTargetUser ? `${deleteTargetUser.fullName} (@${deleteTargetUser.username})` : ''}
+        itemTypeLabel="Tài khoản cán bộ"
+      />
+
       <ActionConfirmModal
         isOpen={!!toggleStatusUser}
         onClose={() => setToggleStatusUser(null)}

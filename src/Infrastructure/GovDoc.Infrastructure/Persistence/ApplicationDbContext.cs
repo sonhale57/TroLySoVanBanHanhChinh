@@ -38,6 +38,9 @@ namespace GovDoc.Infrastructure.Persistence
                 entity.Property(e => e.FullName).HasMaxLength(100).IsRequired();
                 entity.Property(e => e.Role).HasMaxLength(20).HasDefaultValue("USER");
                 entity.Property(e => e.Department).HasMaxLength(150).IsRequired();
+                entity.Property(e => e.AiProvider).HasMaxLength(50);
+                entity.Property(e => e.AiModel).HasMaxLength(100);
+                entity.Property(e => e.ApiKeysVaultJson).HasColumnType("nvarchar(max)");
             });
 
             // UserSession
@@ -64,10 +67,15 @@ namespace GovDoc.Infrastructure.Persistence
                 entity.Property(e => e.Title).IsRequired();
                 entity.Property(e => e.DocType).HasMaxLength(50).IsRequired();
                 entity.Property(e => e.Issuer).HasMaxLength(150).IsRequired();
+                entity.Property(e => e.IssuerAgency).HasMaxLength(250);
+                entity.Property(e => e.DocumentScope).HasMaxLength(30).HasDefaultValue("QPPL");
+                entity.Property(e => e.FieldCategory).HasMaxLength(50).HasDefaultValue("QUAN_TRI_VAN_PHONG");
                 entity.Property(e => e.Status).HasMaxLength(30).HasDefaultValue("ACTIVE");
 
                 entity.HasIndex(e => e.CodeNumber);
                 entity.HasIndex(e => e.Status);
+                entity.HasIndex(e => e.DocumentScope);
+                entity.HasIndex(e => e.FieldCategory);
                 entity.HasIndex(e => new { e.EffectiveDate, e.ExpiredDate });
 
                 entity.HasOne(e => e.Creator)
@@ -129,11 +137,22 @@ namespace GovDoc.Infrastructure.Persistence
                 entity.Property(e => e.SubjectTitle).HasMaxLength(500);
                 entity.Property(e => e.StoredFilePath).HasMaxLength(500);
                 entity.Property(e => e.OriginalFileName).HasMaxLength(255).IsRequired();
-                entity.Property(e => e.UrgencyLevel).HasMaxLength(50).HasDefaultValue("THUONG");
+                entity.Property(e => e.UrgencyLevel).HasMaxLength(20).HasDefaultValue("THUONG");
                 entity.Property(e => e.SelectedOptionId).HasMaxLength(50).IsRequired();
+                entity.Property(e => e.CurrentStatus).HasMaxLength(30).HasDefaultValue("CHO_XU_LY");
+                entity.Property(e => e.TrackingId).HasMaxLength(100);
+                entity.Property(e => e.IsGoldSample).HasDefaultValue(false);
+                entity.Property(e => e.OutputFileName).HasMaxLength(255);
+                entity.Property(e => e.OutputFilePath).HasMaxLength(500);
+                entity.Property(e => e.IsCustomOutput).HasDefaultValue(false);
+                entity.Property(e => e.SignerAuthority).HasMaxLength(150);
+                entity.Property(e => e.DocDateStr).HasMaxLength(100);
 
                 entity.HasIndex(e => e.UserId);
                 entity.HasIndex(e => e.CreatedAt);
+                entity.HasIndex(e => e.CurrentStatus);
+                entity.HasIndex(e => e.TrackingId);
+                entity.HasIndex(e => e.IsCustomOutput);
 
                 entity.HasOne(e => e.User)
                       .WithMany()

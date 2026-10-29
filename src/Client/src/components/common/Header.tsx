@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
   BookMarked,
-  History,
   Shield,
   User,
   FileText,
@@ -11,20 +10,20 @@ import {
   Clock,
   ShieldCheck,
   FolderArchive,
-  Users
+  Users,
+  Sliders,
+  Cpu
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { ChangePasswordModal } from './ChangePasswordModal';
 import { ActionConfirmModal } from './ActionConfirmModal';
 
 interface HeaderProps {
-  onOpenAuditLogs: () => void;
-  activeNav?: 'workspace' | 'legal-kb' | 'lookup' | 'processed-docs' | 'users';
+  activeNav?: 'workspace' | 'legal-kb' | 'lookup' | 'processed-docs' | 'users' | 'settings';
   onNavigate?: (path: string) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
-  onOpenAuditLogs,
   activeNav = 'workspace',
   onNavigate,
 }) => {
@@ -129,11 +128,11 @@ export const Header: React.FC<HeaderProps> = ({
                 <ChevronDown className="w-3.5 h-3.5 text-white/70" />
               </button>
 
-              {/* Dropdown Menu Cá nhân (Đổi mật khẩu, Đăng xuất) */}
+              {/* Dropdown Menu Cá nhân (Cài đặt AI & Prompt, Đổi mật khẩu, Đăng xuất) */}
               {isUserMenuOpen && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setIsUserMenuOpen(false)} />
-                  <div className="absolute right-0 mt-2 w-60 bg-white text-gov-text rounded-xl shadow-2xl border border-gov-border py-1.5 z-50 animate-in fade-in zoom-in-95 duration-150">
+                  <div className="absolute right-0 mt-2 w-64 bg-white text-gov-text rounded-xl shadow-2xl border border-gov-border py-1.5 z-50 animate-in fade-in zoom-in-95 duration-150">
                     <div className="px-3.5 py-2.5 border-b border-gov-border bg-gov-subtle/40">
                       <div className="text-xs font-bold text-gov-text">{user.fullName}</div>
                       <div className="text-[11px] text-gov-text-secondary">{user.department}</div>
@@ -141,6 +140,19 @@ export const Header: React.FC<HeaderProps> = ({
                         Tài khoản: @{user.username}
                       </div>
                     </div>
+
+                    {/* Nút Cài đặt AI & Prompt */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        handleNav('/settings');
+                      }}
+                      className="w-full text-left px-3.5 py-2 text-xs text-gov-text hover:bg-gov-bg flex items-center gap-2 font-medium transition-colors"
+                    >
+                      <Sliders className="w-4 h-4 text-gov-primary" />
+                      <span>Cài đặt Cấu hình</span>
+                    </button>
 
                     <button
                       type="button"
@@ -178,20 +190,20 @@ export const Header: React.FC<HeaderProps> = ({
       {/* =========================================================
           2. THANH NAVIGATION MỚI (Tách biệt riêng bên dưới Header)
          ========================================================= */}
-      <nav className="bg-white border-b border-gov-border shadow-sm sticky top-0 z-20 select-none">
+      <nav className="bg-white border-b border-gov-border shadow-2xs sticky top-0 z-20 select-none">
         <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
           {/* Left: Tab điều hướng tác nghiệp */}
-          <div className="flex items-center gap-1 sm:gap-2 py-1.5 overflow-x-auto">
+          <div className="flex items-center gap-2 sm:gap-4">
             {/* Tab: Bàn làm việc */}
             <button
               type="button"
               onClick={() => handleNav('/')}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${activeNav === 'workspace'
-                ? 'bg-gov-primary text-white shadow-sm'
-                : 'text-gov-text-secondary hover:text-gov-text hover:bg-gov-bg'
+              className={`flex items-center gap-2 px-3.5 py-3 text-xs font-bold transition-colors whitespace-nowrap border-b-2 -mb-[1px] ${activeNav === 'workspace'
+                ? 'border-gov-primary text-gov-primary'
+                : 'border-transparent text-gov-text-secondary hover:text-gov-text hover:border-gov-border/70'
                 }`}
             >
-              <FileText className={`w-4 h-4 ${activeNav === 'workspace' ? 'text-white' : 'text-gov-primary'}`} />
+              <FileText className={`w-4 h-4 ${activeNav === 'workspace' ? 'text-gov-primary' : 'text-gov-text-secondary'}`} />
               <span>Bàn làm việc</span>
             </button>
 
@@ -199,12 +211,12 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={() => handleNav('/processed-documents')}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${activeNav === 'processed-docs'
-                ? 'bg-gov-primary text-white shadow-sm'
-                : 'text-gov-text-secondary hover:text-gov-text hover:bg-gov-bg'
+              className={`flex items-center gap-2 px-3.5 py-3 text-xs font-bold transition-colors whitespace-nowrap border-b-2 -mb-[1px] ${activeNav === 'processed-docs'
+                ? 'border-gov-primary text-gov-primary'
+                : 'border-transparent text-gov-text-secondary hover:text-gov-text hover:border-gov-border/70'
                 }`}
             >
-              <FolderArchive className={`w-4 h-4 ${activeNav === 'processed-docs' ? 'text-white' : 'text-gov-gold'}`} />
+              <FolderArchive className={`w-4 h-4 ${activeNav === 'processed-docs' ? 'text-gov-primary' : 'text-gov-gold'}`} />
               <span>Hồ sơ đã xử lý</span>
             </button>
 
@@ -212,12 +224,12 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               type="button"
               onClick={() => handleNav(user?.role === 'ADMIN' ? '/admin/legal-kb' : '/legal-lookup')}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${activeNav === 'legal-kb' || activeNav === 'lookup'
-                ? 'bg-gov-primary text-white shadow-sm'
-                : 'text-gov-text-secondary hover:text-gov-text hover:bg-gov-bg'
+              className={`flex items-center gap-2 px-3.5 py-3 text-xs font-bold transition-colors whitespace-nowrap border-b-2 -mb-[1px] ${activeNav === 'legal-kb' || activeNav === 'lookup'
+                ? 'border-gov-primary text-gov-primary'
+                : 'border-transparent text-gov-text-secondary hover:text-gov-text hover:border-gov-border/70'
                 }`}
             >
-              <BookMarked className={`w-4 h-4 ${activeNav === 'legal-kb' || activeNav === 'lookup' ? 'text-gov-gold-light' : 'text-gov-gold'}`} />
+              <BookMarked className={`w-4 h-4 ${activeNav === 'legal-kb' || activeNav === 'lookup' ? 'text-gov-primary' : 'text-gov-gold'}`} />
               <span>
                 {user?.role === 'ADMIN' ? 'Quản trị Tủ sách Pháp luật' : 'Tra cứu Pháp luật'}
               </span>
@@ -228,24 +240,27 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 type="button"
                 onClick={() => handleNav('/admin/users')}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${activeNav === 'users'
-                  ? 'bg-gov-primary text-white shadow-sm'
-                  : 'text-gov-text-secondary hover:text-gov-text hover:bg-gov-bg'
+                className={`flex items-center gap-2 px-3.5 py-3 text-xs font-bold transition-colors whitespace-nowrap border-b-2 -mb-[1px] ${activeNav === 'users'
+                  ? 'border-gov-primary text-gov-primary'
+                  : 'border-transparent text-gov-text-secondary hover:text-gov-text hover:border-gov-border/70'
                   }`}
               >
-                <Users className={`w-4 h-4 ${activeNav === 'users' ? 'text-white' : 'text-gov-primary'}`} />
+                <Users className={`w-4 h-4 ${activeNav === 'users' ? 'text-gov-primary' : 'text-gov-text-secondary'}`} />
                 <span>Quản lý Cán bộ</span>
               </button>
             )}
 
-            {/* Tab: Nhật ký Xử lý */}
+            {/* Tab: Cài đặt AI & Prompt (Trang cài đặt mới cho Desktop) */}
             <button
               type="button"
-              onClick={onOpenAuditLogs}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold text-gov-text-secondary hover:text-gov-text hover:bg-gov-bg transition-all whitespace-nowrap"
+              onClick={() => handleNav('/settings')}
+              className={`flex items-center gap-2 px-3.5 py-3 text-xs font-bold transition-colors whitespace-nowrap border-b-2 -mb-[1px] ${activeNav === 'settings'
+                ? 'border-gov-primary text-gov-primary'
+                : 'border-transparent text-gov-text-secondary hover:text-gov-text hover:border-gov-border/70'
+                }`}
             >
-              <History className="w-4 h-4 text-gov-text-secondary" />
-              <span>Nhật ký Xử lý</span>
+              <Sliders className={`w-4 h-4 ${activeNav === 'settings' ? 'text-gov-primary' : 'text-gov-text-secondary'}`} />
+              <span>Cài đặt Cấu hình</span>
             </button>
           </div>
 

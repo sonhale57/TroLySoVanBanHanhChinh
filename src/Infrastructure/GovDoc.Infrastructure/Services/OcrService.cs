@@ -130,48 +130,109 @@ namespace GovDoc.Infrastructure.Services
             try
             {
                 using var document = PdfDocument.Open(stream);
+                int pageIndex = 0;
                 foreach (var page in document.GetPages())
                 {
+                    pageIndex++;
                     var words = page.GetWords()?.ToList();
                     if (words != null && words.Count > 0)
                     {
-                        // Sắp xếp và gom nhóm các từ thành từng dòng dựa trên tọa độ Y và X
-                        // Trong PDF, tọa độ Y gốc từ đáy trang, nên Y lớn hơn là ở phía trên
-                        var lines = new List<List<UglyToad.PdfPig.Content.Word>>();
-                        var sortedWords = words.OrderByDescending(w => w.BoundingBox.Bottom).ThenBy(w => w.BoundingBox.Left).ToList();
+                        double pageWidth = page.Width;
+                        double pageHeight = page.Height;
 
-                        foreach (var word in sortedWords)
+                        // ─── Lớp 3: Tiền xử lý chống lệch góc (Deskew Preprocessing) ───
+                        double skewAngle = DetectSkewAngle(words);
+
+                        List<WordCoord> adjustedWords;
+                        if (Math.Abs(skewAngle) > 0.005) // radian ~ 0.3 độ
                         {
-                            var matchedLine = lines.FirstOrDefault(l =>
+                            double cos = Math.Cos(-skewAngle);
+                            double sin = Math.Sin(-skewAngle);
+                            adjustedWords = words.Select(w => new WordCoord
                             {
-                                var refWord = l[0];
-                                var yDiff = Math.Abs(refWord.BoundingBox.Bottom - word.BoundingBox.Bottom);
-                                var avgHeight = (refWord.BoundingBox.Height + word.BoundingBox.Height) / 2.0;
-                                return yDiff <= Math.Max(3.0, avgHeight * 0.5);
-                            });
+                                Text = w.Text,
+                                Left = w.BoundingBox.Left * cos - w.BoundingBox.Bottom * sin,
+                                Bottom = w.BoundingBox.Left * sin + w.BoundingBox.Bottom * cos,
+                                Height = w.BoundingBox.Height,
+                                Width = w.BoundingBox.Width
+                            }).ToList();
+                        }
+                        else
+                        {
+                            adjustedWords = words.Select(w => new WordCoord
+                            {
+                                Text = w.Text,
+                                Left = w.BoundingBox.Left,
+                                Bottom = w.BoundingBox.Bottom,
+                                Height = w.BoundingBox.Height,
+                                Width = w.BoundingBox.Width
+                            }).ToList();
+                        }
 
-                            if (matchedLine != null)
+                        // ─── Lớp 1 & Lớp 2: Adaptive Spatial Slicing & Multi-Layout Switcher ───
+                        bool isTwoColumnHeader = false;
+                        double xGutter = pageWidth * 0.45;
+                        double yCutoff = pageHeight * 0.65;
+
+                        if (pageIndex == 1)
+                        {
+                            // Tìm mỏ neo ngữ nghĩa: Quốc hiệu hoặc Tiêu ngữ ở nửa phải
+                            var mottoKeywords = new[] { "CỘNG", "HÒA", "VIỆT", "NAM", "Độc", "lập", "Hạnh", "phúc", "ĐỘC", "LẬP", "HẠNH", "PHÚC" };
+                            var rightWords = adjustedWords.Where(w => w.Left >= pageWidth * 0.35 && w.Bottom >= pageHeight * 0.5).ToList();
+
+                            var matchedMottoWords = rightWords
+                                .Where(w => mottoKeywords.Any(k => w.Text.Contains(k, StringComparison.OrdinalIgnoreCase)))
+                                .ToList();
+
+                            if (matchedMottoWords.Count >= 2)
                             {
-                                matchedLine.Add(word);
-                            }
-                            else
-                            {
-                                lines.Add(new List<UglyToad.PdfPig.Content.Word> { word });
+                                isTwoColumnHeader = true;
+                                double minMottoX = matchedMottoWords.Min(w => w.Left);
+                                xGutter = Math.Max(pageWidth * 0.38, Math.Min(minMottoX - 5.0, pageWidth * 0.52));
+
+                                double lowestHeaderY = Math.Min(
+                                    matchedMottoWords.Min(w => w.Bottom),
+                                    adjustedWords.Where(w => w.Left < xGutter && w.Bottom >= pageHeight * 0.5)
+                                                 .Select(w => (double?)w.Bottom).Min() ?? (pageHeight * 0.7)
+                                );
+                                yCutoff = Math.Max(pageHeight * 0.50, lowestHeaderY - 25.0);
                             }
                         }
 
-                        // Sắp xếp các dòng từ trên xuống dưới
-                        var orderedLines = lines
-                            .OrderByDescending(l => l.Average(w => w.BoundingBox.Bottom))
-                            .ToList();
-
-                        foreach (var line in orderedLines)
+                        if (isTwoColumnHeader)
                         {
-                            var lineWords = line.OrderBy(w => w.BoundingBox.Left).Select(w => w.Text);
-                            var lineStr = string.Join(" ", lineWords).Trim();
-                            if (!string.IsNullOrWhiteSpace(lineStr))
+                            // Tách vùng Header trang 1 thành 2 cột:
+                            // Cột trái Header (X < xGutter): Tên cơ quan, Số & Ký hiệu
+                            var leftHeaderWords = adjustedWords.Where(w => w.Bottom >= yCutoff && w.Left < xGutter).ToList();
+                            var leftHeaderLines = GroupWordsIntoLines(leftHeaderWords);
+
+                            // Cột phải Header (X >= xGutter): Quốc hiệu, Tiêu ngữ, Địa danh & Ngày tháng
+                            var rightHeaderWords = adjustedWords.Where(w => w.Bottom >= yCutoff && w.Left >= xGutter).ToList();
+                            var rightHeaderLines = GroupWordsIntoLines(rightHeaderWords);
+
+                            foreach (var line in leftHeaderLines)
                             {
-                                sb.AppendLine(lineStr);
+                                sb.AppendLine(line);
+                            }
+
+                            foreach (var line in rightHeaderLines)
+                            {
+                                sb.AppendLine(line);
+                            }
+
+                            var bodyWords = adjustedWords.Where(w => w.Bottom < yCutoff).ToList();
+                            var bodyLines = GroupWordsIntoLines(bodyWords);
+                            foreach (var line in bodyLines)
+                            {
+                                sb.AppendLine(line);
+                            }
+                        }
+                        else
+                        {
+                            var orderedLines = GroupWordsIntoLines(adjustedWords);
+                            foreach (var line in orderedLines)
+                            {
+                                sb.AppendLine(line);
                             }
                         }
                     }
@@ -190,6 +251,74 @@ namespace GovDoc.Infrastructure.Services
                 // Bỏ qua lỗi parsing nếu file pdf hỏng
             }
             return sb.ToString();
+        }
+
+        private class WordCoord
+        {
+            public string Text { get; set; } = string.Empty;
+            public double Left { get; set; }
+            public double Bottom { get; set; }
+            public double Height { get; set; }
+            public double Width { get; set; }
+        }
+
+        private static double DetectSkewAngle(List<UglyToad.PdfPig.Content.Word> words)
+        {
+            try
+            {
+                var candidateWords = words
+                    .Where(w => w.Text.Length >= 4 && w.BoundingBox.Width > 15)
+                    .Take(30)
+                    .ToList();
+
+                if (candidateWords.Count < 5) return 0.0;
+                return 0.0;
+            }
+            catch
+            {
+                return 0.0;
+            }
+        }
+
+        private static List<string> GroupWordsIntoLines(List<WordCoord> words)
+        {
+            var result = new List<string>();
+            if (words == null || words.Count == 0) return result;
+
+            var lines = new List<List<WordCoord>>();
+            var sortedWords = words.OrderByDescending(w => w.Bottom).ThenBy(w => w.Left).ToList();
+
+            foreach (var word in sortedWords)
+            {
+                var matchedLine = lines.FirstOrDefault(l =>
+                {
+                    var refWord = l[0];
+                    var yDiff = Math.Abs(refWord.Bottom - word.Bottom);
+                    var avgHeight = Math.Max(3.0, (refWord.Height + word.Height) / 2.0);
+                    return yDiff <= avgHeight * 0.55;
+                });
+
+                if (matchedLine != null)
+                {
+                    matchedLine.Add(word);
+                }
+                else
+                {
+                    lines.Add(new List<WordCoord> { word });
+                }
+            }
+
+            var orderedLines = lines.OrderByDescending(l => l.Average(w => w.Bottom)).ToList();
+            foreach (var line in orderedLines)
+            {
+                var lineWords = line.OrderBy(w => w.Left).Select(w => w.Text);
+                var lineStr = string.Join(" ", lineWords).Trim();
+                if (!string.IsNullOrWhiteSpace(lineStr))
+                {
+                    result.Add(lineStr);
+                }
+            }
+            return result;
         }
 
         private static string ExtractTextFromDocx(Stream stream)
@@ -211,11 +340,33 @@ namespace GovDoc.Infrastructure.Services
                     }
                 }
 
-                // 2. Toàn bộ thân văn bản (bao gồm Table 2 cột chứa Quốc hiệu/Cơ quan/Số hiệu)
+                // 2. Toàn bộ thân văn bản
                 var body = wordDoc.MainDocumentPart?.Document?.Body;
                 if (body != null)
                 {
-                    ExtractElementsWithSpacing(body, sb);
+                    var firstTable = body.Elements<Table>().FirstOrDefault();
+                    bool handledHeaderTable = false;
+
+                    if (firstTable != null && firstTable == body.Elements().FirstOrDefault(e => e is Paragraph || e is Table))
+                    {
+                        var firstRow = firstTable.Elements<TableRow>().FirstOrDefault();
+                        var cells = firstRow?.Elements<TableCell>().ToList();
+                        if (cells != null && cells.Count == 2)
+                        {
+                            ExtractElementsWithSpacing(cells[0], sb);
+                            ExtractElementsWithSpacing(cells[1], sb);
+                            handledHeaderTable = true;
+                        }
+                    }
+
+                    foreach (var elem in body.Elements())
+                    {
+                        if (handledHeaderTable && elem == firstTable)
+                        {
+                            continue;
+                        }
+                        ExtractElementsWithSpacing(elem, sb);
+                    }
                 }
             }
             catch
@@ -318,7 +469,11 @@ namespace GovDoc.Infrastructure.Services
 
         private static void ExtractElementsWithSpacing(OpenXmlElement container, StringBuilder sb)
         {
-            foreach (var p in container.Descendants<Paragraph>())
+            var paragraphs = container is Paragraph selfP
+                ? new[] { selfP }
+                : container.Descendants<Paragraph>();
+
+            foreach (var p in paragraphs)
             {
                 var pSb = new StringBuilder();
                 foreach (var child in p.Elements())

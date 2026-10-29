@@ -50,6 +50,18 @@ export interface AppraisalVerdict {
   draftContentBullets: string[];
 }
 
+export interface AiVerificationInfo {
+  isAiVerified: boolean;
+  status: 'VERIFIED' | 'BASIC_TEMPLATE' | 'FALLBACK';
+  modelUsed: string;
+  provider: string;
+  confidenceScore: number;
+  verifiedAt: string;
+  legalBasesCount: number;
+  evaluatedRulesCount: number;
+  summaryMessage: string;
+}
+
 export interface ProcessIncomingResult {
   taskId: string;
   documentInfo: DocumentInfo;
@@ -58,6 +70,13 @@ export interface ProcessIncomingResult {
   actionOptions: ActionOption[];
   legalAlerts: string[];
   extractedRawText?: string;
+  initialDraftHtml?: string;
+  processingLogId?: string;
+  currentStatus?: string;
+  aiVerification?: AiVerificationInfo;
+  outputFileName?: string;
+  outputFilePath?: string;
+  isCustomOutput?: boolean;
 }
 
 export interface LegalClause {
@@ -84,6 +103,9 @@ export interface LegalDocumentItem {
   docType: string;
   hierarchyRank: number;
   issuer: string;
+  issuerAgency?: string;
+  documentScope: 'QPPL' | 'HANH_CHINH' | 'HUONG_DAN_NGHIEP_VU';
+  fieldCategory: string;
   issuedDate: string;
   effectiveDate: string;
   expiredDate?: string;
@@ -102,8 +124,11 @@ export interface ProcessingLogItem {
   subjectTitle?: string;
   originalFileName: string;
   urgencyLevel: string;
+  receivedDate?: string;
   slaDeadline?: string;
   selectedOptionId: string;
+  currentStatus: 'CHO_XU_LY' | 'DANG_XU_LY' | 'DA_XU_LY' | 'DA_KY';
+  signedDate?: string;
   createdAt: string;
   isOwner?: boolean;
 }
@@ -115,14 +140,26 @@ export interface ProcessedRecordItem {
   subjectTitle?: string;
   originalFileName: string;
   urgencyLevel: string;
+  receivedDate: string;
   slaDeadline?: string;
   selectedOptionId: string;
+  currentStatus: 'CHO_XU_LY' | 'DANG_XU_LY' | 'DA_XU_LY' | 'DA_KY';
+  signedDate?: string;
+  ratingScore?: number;
+  isGoldSample: boolean;
+  completedAt?: string;
   createdAt: string;
   reprocessCount: number;
   lastReprocessedAt?: string;
   userName: string;
   department: string;
   hasStoredFile: boolean;
+  storedFilePath?: string;
+  trackingId?: string;
+  outputFileName?: string;
+  outputFilePath?: string;
+  isCustomOutput?: boolean;
+  hasOutputFile?: boolean;
 }
 
 export interface ProcessedRecordDetail {
@@ -132,11 +169,18 @@ export interface ProcessedRecordDetail {
   subjectTitle?: string;
   originalFileName: string;
   urgencyLevel: string;
+  receivedDate: string;
   slaDeadline?: string;
   selectedOptionId: string;
+  currentStatus: 'CHO_XU_LY' | 'DANG_XU_LY' | 'DA_XU_LY' | 'DA_KY';
+  signedDate?: string;
+  ratingScore?: number;
+  isGoldSample: boolean;
+  completedAt?: string;
   summaryDataJson: string;
   legalBasesUsedJson: string;
   resultDataJson?: string;
+  draftContentHtml?: string;
   exportedDocxPath?: string;
   createdAt: string;
   userName: string;
@@ -144,6 +188,54 @@ export interface ProcessedRecordDetail {
   reprocessCount: number;
   lastReprocessedAt?: string;
   hasStoredFile: boolean;
+  storedFilePath?: string;
+  trackingId?: string;
+  outputFileName?: string;
+  outputFilePath?: string;
+  isCustomOutput?: boolean;
+  signerAuthority?: string;
+  recipientsJson?: string;
+  docDateStr?: string;
+  hasOutputFile?: boolean;
+}
+
+export interface UploadCustomOutputResponse {
+  processingLogId: string;
+  outputFileName: string;
+  outputFilePath: string;
+  previewUrl: string;
+  draftContentHtml: string;
+  currentStatus: string;
+  isCustomOutput: boolean;
+  message: string;
+  detectedSubjectTitle?: string;
+  detectedDocCode?: string;
+  detectedIssuer?: string;
+  detectedLegalBases?: string[];
+  detectedRecipients?: string[];
+}
+
+export interface SaveDraftPayload {
+  draftContentHtml: string;
+  subjectTitle?: string;
+  selectedOptionId?: string;
+  issuerParent?: string;
+  issuerName?: string;
+  docCode?: string;
+  location?: string;
+  docDateStr?: string;
+  signerAuthority?: string;
+  signerTitle?: string;
+  signerName?: string;
+  recipientsList?: string[];
+}
+
+export interface ReprocessAiResponse {
+  message: string;
+  draftContentHtml: string;
+  summary: DocumentSummary;
+  actionOptions: ActionOption[];
+  legalAlerts: string[];
 }
 
 export interface ManagedUserItem {
@@ -206,4 +298,202 @@ export interface LegalProposalItem {
   reviewerName?: string;
   createdAt: string;
   reviewedAt?: string;
+}
+
+// ──────────────────── Phase 1.5 Types ────────────────────
+
+export interface ApiKeyVaultItem {
+  id: string;
+  label: string;
+  provider: 'GEMINI' | 'OPENAI' | 'ANTHROPIC' | 'OPENROUTER' | string;
+  model?: string;
+  maskedKey: string;
+  isActive: boolean;
+  status: 'HEALTHY' | 'ERROR' | 'UNCHECKED';
+  latencyMs?: number;
+  lastTestedAt?: string;
+  lastErrorReason?: string;
+}
+
+export interface AddApiKeyPayload {
+  label?: string;
+  provider: string;
+  model?: string;
+  apiKey: string;
+  autoTestAndActivate?: boolean;
+}
+
+export interface TestAllApiKeysResult {
+  totalKeys: number;
+  healthyKeys: number;
+  errorKeys: number;
+  items: ApiKeyVaultItem[];
+  summaryMessage: string;
+}
+
+export interface UserAiConfig {
+  provider: string;
+  model: string;
+  effectiveModel?: string;
+  hasApiKey: boolean;
+  maskedApiKey?: string;
+  department: string;
+  customPrompt?: string;
+  enabledSkillsJson?: string;
+  notificationPreferencesJson?: string;
+  apiKeysVault?: ApiKeyVaultItem[];
+}
+
+export interface UpdateUserAiConfigPayload {
+  provider?: string;
+  model?: string;
+  apiKey?: string;
+  customPrompt?: string;
+  enabledSkillsJson?: string;
+  notificationPreferencesJson?: string;
+  apiKeysVault?: ApiKeyVaultItem[];
+}
+
+export interface UserNotificationPreferences {
+  urgentDocAlert: boolean;
+  slaOverdueAlert: boolean;
+  slaApproachingAlert: boolean;
+  signedDocAlert: boolean;
+  slaReminderHoursBefore: number;
+}
+
+export interface DepartmentSkillConfigItem {
+  id: string;
+  name: string;
+  description: string;
+  legalRef: string;
+  isEnabled: boolean;
+}
+
+export interface DailyChartPoint {
+  label: string;
+  dateKey: string;
+  receivedCount: number;
+  processedCount: number;
+  signedCount: number;
+  overdueCount: number;
+}
+
+export interface DocumentStatistics {
+  totalReceived: number;
+  choXuLy: number;
+  dangXuLy: number;
+  daXuLy: number;
+  daKy: number;
+  overdueSla: number;
+  onTimeRate: number;
+  periodType: string;
+  periodLabel: string;
+  statusDistribution: Record<string, number>;
+  fieldCategoryDistribution: Record<string, number>;
+  urgencyDistribution?: Record<string, number>;
+  timelineBreakdown?: DailyChartPoint[];
+}
+
+export interface DocumentTemplate {
+  parentAgency: string;
+  issuingAgency: string;
+  docCodeTemplate: string;
+  provinceCity: string;
+  signerPosition: string;
+  signerName: string;
+  recipientDefault: string;
+}
+
+export interface TestApiKeyPayload {
+  provider?: string;
+  model?: string;
+  apiKey?: string;
+  prompt?: string;
+}
+
+export interface TestApiKeyResult {
+  success: boolean;
+  reply?: string;
+  latencyMs: number;
+  provider: string;
+  model: string;
+  status: string;
+  errorMessage?: string;
+  detailedError?: string;
+  recommendation?: string;
+}
+
+export interface QueueTaskItem {
+  trackingId: string;
+  fileName: string;
+  status: 'QUEUED' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+  errorMessage?: string;
+  processingLogId?: string;
+  result?: ProcessIncomingResult;
+  createdAt: string;
+}
+
+export interface BatchUploadResponse {
+  batchId: string;
+  totalFiles: number;
+  tasks: QueueTaskItem[];
+}
+
+export interface ForeignKeyDependencyItem {
+  tableName: string;
+  label: string;
+  count: number;
+}
+
+export interface DeleteImpactResult {
+  hasForeignKeys: boolean;
+  requiresCascadeConfirmation: boolean;
+  message: string;
+  dependencies: ForeignKeyDependencyItem[];
+}
+
+export interface NotificationItem {
+  id: string;
+  title: string;
+  body: string;
+  type: 'URGENT_DOC' | 'SLA_WARNING' | 'SIGNED' | 'SYSTEM';
+  urgencyLevel: 'HỎA TỐC' | 'THƯỢNG KHẨN' | 'KHẨN' | 'THƯỜNG';
+  targetUrl?: string;
+  documentCode?: string;
+  isRead: boolean;
+  createdAt: string;
+  slaDeadline?: string;
+}
+
+export interface PushSubscriptionPayload {
+  endpoint: string;
+  p256dh?: string;
+  auth?: string;
+  deviceName?: string;
+}
+
+export interface SendPushNotificationPayload {
+  title: string;
+  body: string;
+  type?: string;
+  urgencyLevel?: string;
+  documentCode?: string;
+  targetUrl?: string;
+}
+
+export interface MobileQuickReport {
+  timeFilter: string;
+  totalReceived: number;
+  choXuLy: number;
+  dangXuLy: number;
+  daXuLy: number;
+  daKy: number;
+  overdueSla: number;
+  urgentCount: number;
+  expiringSoonSla: number;
+  decree30ComplianceRate: number;
+  onTimeRate: number;
+  urgencyBreakdown: Record<string, number>;
+  urgentAlerts?: NotificationItem[];
 }

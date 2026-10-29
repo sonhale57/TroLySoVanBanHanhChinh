@@ -150,3 +150,4 @@ Sau khi cài xong, mở trình duyệt:
 | Lỗi kết nối DB | Connection String sai hoặc SQL chưa chạy | Kiểm tra `appsettings.Production.json` và SQL Server service |
 | Trang trắng sau đăng nhập | Chưa phân quyền thư mục | Chạy lệnh `icacls` phân quyền |
 | Application Pool dừng | App crash khi khởi động | Bật `stdoutLogEnabled=true` trong `web.config`, xem log |
+| HTTP Error 405 Method Not Allowed | WebDAV Module trên IIS chặn PUT/DELETE/PATCH | Đã được cấu hình tự động loại bỏ WebDAV trong `web.config` đi kèm; nếu vẫn bị, vào IIS Manager -> Modules -> gỡ bỏ `WebDAVModule`. |

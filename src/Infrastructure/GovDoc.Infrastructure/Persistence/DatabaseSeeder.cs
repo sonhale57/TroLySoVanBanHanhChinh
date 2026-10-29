@@ -41,11 +41,13 @@ namespace GovDoc.Infrastructure.Persistence
                 }
             }
 
-            // 2. Tự động kiểm tra thay đổi cấu trúc bảng & cột (Self-Migrating & Schema Sync)
+            // 2. Tự động kiểm tra thay đổi cấu trúc bảng & cột (Self-Migrating & Schema Sync toàn diện)
             try
             {
                 await context.Database.ExecuteSqlRawAsync(@"
-                    -- Bảng Users
+                    -- ========================================================
+                    -- 1. BẢNG Users
+                    -- ========================================================
                     IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'Users')
                     BEGIN
                         CREATE TABLE [Users] (
@@ -55,13 +57,70 @@ namespace GovDoc.Infrastructure.Persistence
                             [FullName] NVARCHAR(100) NOT NULL,
                             [Role] NVARCHAR(20) NOT NULL DEFAULT 'USER',
                             [Department] NVARCHAR(150) NOT NULL,
+                            [Email] NVARCHAR(150) NULL,
                             [IsActive] BIT NOT NULL DEFAULT 1,
+                            [PasswordChangedAt] DATETIMEOFFSET NULL,
+                            [FailedLoginAttempts] INT NOT NULL DEFAULT 0,
+                            [LockoutEnd] DATETIMEOFFSET NULL,
+                            [EncryptedApiKey] NVARCHAR(MAX) NULL,
+                            [ApiKeysVaultJson] NVARCHAR(MAX) NULL,
+                            [AiProvider] NVARCHAR(50) NULL,
+                            [AiModel] NVARCHAR(100) NULL,
+                            [CustomPrompt] NVARCHAR(MAX) NULL,
+                            [EnabledSkillsJson] NVARCHAR(MAX) NULL,
+                            [NotificationPreferencesJson] NVARCHAR(MAX) NULL,
+                            [DocumentTemplateJson] NVARCHAR(MAX) NULL,
+                            [UpdatedAt] DATETIMEOFFSET NOT NULL DEFAULT SYSDATETIMEOFFSET(),
                             [CreatedAt] DATETIMEOFFSET NOT NULL DEFAULT SYSDATETIMEOFFSET()
                         );
                         CREATE UNIQUE INDEX IX_Users_Username ON [Users]([Username]);
                     END
+                    ELSE
+                    BEGIN
+                        -- Tự động bổ sung các cột còn thiếu cho Users nếu DB cũ đã tồn tại
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('Users') AND name = 'Email')
+                            ALTER TABLE Users ADD Email NVARCHAR(150) NULL;
 
-                    -- Bảng UserSessions
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('Users') AND name = 'PasswordChangedAt')
+                            ALTER TABLE Users ADD PasswordChangedAt DATETIMEOFFSET NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('Users') AND name = 'FailedLoginAttempts')
+                            ALTER TABLE Users ADD FailedLoginAttempts INT NOT NULL CONSTRAINT DF_Users_FailedLoginAttempts DEFAULT 0;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('Users') AND name = 'LockoutEnd')
+                            ALTER TABLE Users ADD LockoutEnd DATETIMEOFFSET NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('Users') AND name = 'EncryptedApiKey')
+                            ALTER TABLE Users ADD EncryptedApiKey NVARCHAR(MAX) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('Users') AND name = 'ApiKeysVaultJson')
+                            ALTER TABLE Users ADD ApiKeysVaultJson NVARCHAR(MAX) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('Users') AND name = 'AiProvider')
+                            ALTER TABLE Users ADD AiProvider NVARCHAR(50) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('Users') AND name = 'AiModel')
+                            ALTER TABLE Users ADD AiModel NVARCHAR(100) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('Users') AND name = 'CustomPrompt')
+                            ALTER TABLE Users ADD CustomPrompt NVARCHAR(MAX) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('Users') AND name = 'EnabledSkillsJson')
+                            ALTER TABLE Users ADD EnabledSkillsJson NVARCHAR(MAX) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('Users') AND name = 'NotificationPreferencesJson')
+                            ALTER TABLE Users ADD NotificationPreferencesJson NVARCHAR(MAX) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('Users') AND name = 'DocumentTemplateJson')
+                            ALTER TABLE Users ADD DocumentTemplateJson NVARCHAR(MAX) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('Users') AND name = 'UpdatedAt')
+                            ALTER TABLE Users ADD UpdatedAt DATETIMEOFFSET NOT NULL CONSTRAINT DF_Users_UpdatedAt DEFAULT SYSDATETIMEOFFSET();
+                    END
+
+                    -- ========================================================
+                    -- 2. BẢNG UserSessions
+                    -- ========================================================
                     IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'UserSessions')
                     BEGIN
                         CREATE TABLE [UserSessions] (
@@ -69,17 +128,33 @@ namespace GovDoc.Infrastructure.Persistence
                             [UserId] UNIQUEIDENTIFIER NOT NULL CONSTRAINT FK_UserSessions_Users FOREIGN KEY REFERENCES [Users]([Id]) ON DELETE CASCADE,
                             [RefreshToken] NVARCHAR(255) NOT NULL,
                             [IsPersistent] BIT NOT NULL DEFAULT 0,
+                            [ExpiresAt] DATETIMEOFFSET NOT NULL,
                             [ClientIp] NVARCHAR(100) NULL,
                             [UserAgent] NVARCHAR(500) NULL,
-                            [ExpiresAt] DATETIMEOFFSET NOT NULL,
                             [IsRevoked] BIT NOT NULL DEFAULT 0,
                             [CreatedAt] DATETIMEOFFSET NOT NULL DEFAULT SYSDATETIMEOFFSET()
                         );
                         CREATE UNIQUE INDEX IX_UserSessions_RefreshToken ON [UserSessions]([RefreshToken]);
                         CREATE INDEX IX_UserSessions_UserId ON [UserSessions]([UserId]);
                     END
+                    ELSE
+                    BEGIN
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('UserSessions') AND name = 'IsPersistent')
+                            ALTER TABLE UserSessions ADD IsPersistent BIT NOT NULL CONSTRAINT DF_UserSessions_IsPersistent DEFAULT 0;
 
-                    -- Bảng LegalDocuments
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('UserSessions') AND name = 'ClientIp')
+                            ALTER TABLE UserSessions ADD ClientIp NVARCHAR(100) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('UserSessions') AND name = 'UserAgent')
+                            ALTER TABLE UserSessions ADD UserAgent NVARCHAR(500) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('UserSessions') AND name = 'IsRevoked')
+                            ALTER TABLE UserSessions ADD IsRevoked BIT NOT NULL CONSTRAINT DF_UserSessions_IsRevoked DEFAULT 0;
+                    END
+
+                    -- ========================================================
+                    -- 3. BẢNG LegalDocuments
+                    -- ========================================================
                     IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'LegalDocuments')
                     BEGIN
                         CREATE TABLE [LegalDocuments] (
@@ -89,6 +164,9 @@ namespace GovDoc.Infrastructure.Persistence
                             [DocType] NVARCHAR(50) NOT NULL,
                             [HierarchyRank] INT NOT NULL DEFAULT 0,
                             [Issuer] NVARCHAR(150) NOT NULL,
+                            [IssuerAgency] NVARCHAR(250) NULL,
+                            [DocumentScope] VARCHAR(30) NOT NULL DEFAULT 'QPPL',
+                            [FieldCategory] VARCHAR(50) NOT NULL DEFAULT 'QUAN_TRI_VAN_PHONG',
                             [IssuedDate] DATETIME2 NOT NULL,
                             [EffectiveDate] DATETIME2 NOT NULL,
                             [ExpiredDate] DATETIME2 NULL,
@@ -101,10 +179,46 @@ namespace GovDoc.Infrastructure.Persistence
                         );
                         CREATE INDEX IX_LegalDocuments_CodeNumber ON [LegalDocuments]([CodeNumber]);
                         CREATE INDEX IX_LegalDocuments_Status ON [LegalDocuments]([Status]);
+                        CREATE INDEX IX_LegalDocuments_Scope ON [LegalDocuments]([DocumentScope]);
+                        CREATE INDEX IX_LegalDocuments_Field ON [LegalDocuments]([FieldCategory]);
                         CREATE INDEX IX_LegalDocuments_Dates ON [LegalDocuments]([EffectiveDate], [ExpiredDate]);
                     END
+                    ELSE
+                    BEGIN
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('LegalDocuments') AND name = 'HierarchyRank')
+                            ALTER TABLE LegalDocuments ADD HierarchyRank INT NOT NULL CONSTRAINT DF_LegalDocuments_HierarchyRank DEFAULT 0;
 
-                    -- Bảng LegalClauseNodes
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('LegalDocuments') AND name = 'IssuerAgency')
+                            ALTER TABLE LegalDocuments ADD IssuerAgency NVARCHAR(250) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('LegalDocuments') AND name = 'DocumentScope')
+                            ALTER TABLE LegalDocuments ADD DocumentScope VARCHAR(30) NOT NULL CONSTRAINT DF_LegalDocuments_DocumentScope DEFAULT 'QPPL';
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('LegalDocuments') AND name = 'FieldCategory')
+                            ALTER TABLE LegalDocuments ADD FieldCategory VARCHAR(50) NOT NULL CONSTRAINT DF_LegalDocuments_FieldCategory DEFAULT 'QUAN_TRI_VAN_PHONG';
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('LegalDocuments') AND name = 'ExpiredDate')
+                            ALTER TABLE LegalDocuments ADD ExpiredDate DATETIME2 NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('LegalDocuments') AND name = 'Status')
+                            ALTER TABLE LegalDocuments ADD Status NVARCHAR(30) NOT NULL CONSTRAINT DF_LegalDocuments_Status DEFAULT 'ACTIVE';
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('LegalDocuments') AND name = 'IsDraft')
+                            ALTER TABLE LegalDocuments ADD IsDraft BIT NOT NULL CONSTRAINT DF_LegalDocuments_IsDraft DEFAULT 0;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('LegalDocuments') AND name = 'FilePath')
+                            ALTER TABLE LegalDocuments ADD FilePath NVARCHAR(500) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('LegalDocuments') AND name = 'CreatedBy')
+                            ALTER TABLE LegalDocuments ADD CreatedBy UNIQUEIDENTIFIER NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('LegalDocuments') AND name = 'UpdatedAt')
+                            ALTER TABLE LegalDocuments ADD UpdatedAt DATETIMEOFFSET NOT NULL CONSTRAINT DF_LegalDocuments_UpdatedAt DEFAULT SYSDATETIMEOFFSET();
+                    END
+
+                    -- ========================================================
+                    -- 4. BẢNG LegalClauseNodes
+                    -- ========================================================
                     IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'LegalClauseNodes')
                     BEGIN
                         CREATE TABLE [LegalClauseNodes] (
@@ -121,8 +235,24 @@ namespace GovDoc.Infrastructure.Persistence
                         CREATE INDEX IX_LegalClauseNodes_DocId ON [LegalClauseNodes]([DocId]);
                         CREATE INDEX IX_LegalClauseNodes_ArticleNumber ON [LegalClauseNodes]([ArticleNumber]);
                     END
+                    ELSE
+                    BEGIN
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('LegalClauseNodes') AND name = 'ChapterTitle')
+                            ALTER TABLE LegalClauseNodes ADD ChapterTitle NVARCHAR(200) NULL;
 
-                    -- Bảng LegalRelations
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('LegalClauseNodes') AND name = 'ClauseNumber')
+                            ALTER TABLE LegalClauseNodes ADD ClauseNumber NVARCHAR(100) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('LegalClauseNodes') AND name = 'PointIdentifier')
+                            ALTER TABLE LegalClauseNodes ADD PointIdentifier NVARCHAR(50) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('LegalClauseNodes') AND name = 'Status')
+                            ALTER TABLE LegalClauseNodes ADD Status NVARCHAR(30) NOT NULL CONSTRAINT DF_LegalClauseNodes_Status DEFAULT 'ACTIVE';
+                    END
+
+                    -- ========================================================
+                    -- 5. BẢNG LegalRelations
+                    -- ========================================================
                     IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'LegalRelations')
                     BEGIN
                         CREATE TABLE [LegalRelations] (
@@ -137,8 +267,18 @@ namespace GovDoc.Infrastructure.Persistence
                         CREATE INDEX IX_LegalRelations_SourceDocId ON [LegalRelations]([SourceDocId]);
                         CREATE INDEX IX_LegalRelations_TargetDocId ON [LegalRelations]([TargetDocId]);
                     END
+                    ELSE
+                    BEGIN
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('LegalRelations') AND name = 'AffectedClauses')
+                            ALTER TABLE LegalRelations ADD AffectedClauses NVARCHAR(500) NULL;
 
-                    -- Bảng ProcessingLogs
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('LegalRelations') AND name = 'LegalBasisClause')
+                            ALTER TABLE LegalRelations ADD LegalBasisClause NVARCHAR(MAX) NULL;
+                    END
+
+                    -- ========================================================
+                    -- 6. BẢNG ProcessingLogs
+                    -- ========================================================
                     IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'ProcessingLogs')
                     BEGIN
                         CREATE TABLE [ProcessingLogs] (
@@ -150,12 +290,28 @@ namespace GovDoc.Infrastructure.Persistence
                             [OriginalFileName] NVARCHAR(255) NOT NULL,
                             [StoredFilePath] NVARCHAR(500) NULL,
                             [UrgencyLevel] NVARCHAR(50) NOT NULL DEFAULT 'THUONG',
+                            [ReceivedDate] DATETIMEOFFSET NOT NULL DEFAULT SYSDATETIMEOFFSET(),
                             [SlaDeadline] DATETIMEOFFSET NULL,
-                            [SummaryDataJson] NVARCHAR(MAX) NOT NULL,
-                            [SelectedOptionId] NVARCHAR(50) NOT NULL,
-                            [LegalBasesUsedJson] NVARCHAR(MAX) NOT NULL,
+                            [SummaryDataJson] NVARCHAR(MAX) NOT NULL DEFAULT '',
+                            [SelectedOptionId] NVARCHAR(50) NOT NULL DEFAULT '',
+                            [LegalBasesUsedJson] NVARCHAR(MAX) NOT NULL DEFAULT '',
                             [ResultDataJson] NVARCHAR(MAX) NULL,
+                            [DraftContentHtml] NVARCHAR(MAX) NULL,
                             [ExportedDocxPath] NVARCHAR(500) NULL,
+                            [OutputFileName] NVARCHAR(255) NULL,
+                            [OutputFilePath] NVARCHAR(500) NULL,
+                            [IsCustomOutput] BIT NOT NULL DEFAULT 0,
+                            [SignerAuthority] NVARCHAR(150) NULL,
+                            [RecipientsJson] NVARCHAR(MAX) NULL,
+                            [DocDateStr] NVARCHAR(100) NULL,
+                            [LearnedKeywordsJson] NVARCHAR(MAX) NULL,
+                            [CurrentStatus] VARCHAR(30) NOT NULL DEFAULT 'CHO_XU_LY',
+                            [SignedDate] DATETIMEOFFSET NULL,
+                            [RatingScore] INT NULL,
+                            [IsGoldSample] BIT NOT NULL DEFAULT 0,
+                            [CompletedAt] DATETIMEOFFSET NULL,
+                            [TrackingId] NVARCHAR(100) NULL,
+                            [ErrorMessage] NVARCHAR(MAX) NULL,
                             [ClientIp] NVARCHAR(100) NULL,
                             [ReprocessCount] INT NOT NULL DEFAULT 0,
                             [LastReprocessedAt] DATETIMEOFFSET NULL,
@@ -163,9 +319,106 @@ namespace GovDoc.Infrastructure.Persistence
                         );
                         CREATE INDEX IX_ProcessingLogs_UserId ON [ProcessingLogs]([UserId]);
                         CREATE INDEX IX_ProcessingLogs_CreatedAt ON [ProcessingLogs]([CreatedAt]);
+                        CREATE INDEX IX_ProcessingLogs_Status ON [ProcessingLogs]([CurrentStatus]);
+                        CREATE INDEX IX_ProcessingLogs_Tracking ON [ProcessingLogs]([TrackingId]);
+                        CREATE INDEX IX_ProcessingLogs_IsCustomOutput ON [ProcessingLogs]([IsCustomOutput]);
+                    END
+                    ELSE
+                    BEGIN
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'OutputFileName')
+                            ALTER TABLE ProcessingLogs ADD OutputFileName NVARCHAR(255) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'OutputFilePath')
+                            ALTER TABLE ProcessingLogs ADD OutputFilePath NVARCHAR(500) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'IsCustomOutput')
+                            ALTER TABLE ProcessingLogs ADD IsCustomOutput BIT NOT NULL CONSTRAINT DF_ProcessingLogs_IsCustomOutput DEFAULT 0;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'SignerAuthority')
+                            ALTER TABLE ProcessingLogs ADD SignerAuthority NVARCHAR(150) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'RecipientsJson')
+                            ALTER TABLE ProcessingLogs ADD RecipientsJson NVARCHAR(MAX) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'DocDateStr')
+                            ALTER TABLE ProcessingLogs ADD DocDateStr NVARCHAR(100) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'LearnedKeywordsJson')
+                            ALTER TABLE ProcessingLogs ADD LearnedKeywordsJson NVARCHAR(MAX) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'IncomingDocCode')
+                            ALTER TABLE ProcessingLogs ADD IncomingDocCode NVARCHAR(100) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'IncomingIssuer')
+                            ALTER TABLE ProcessingLogs ADD IncomingIssuer NVARCHAR(150) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'SubjectTitle')
+                            ALTER TABLE ProcessingLogs ADD SubjectTitle NVARCHAR(500) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'StoredFilePath')
+                            ALTER TABLE ProcessingLogs ADD StoredFilePath NVARCHAR(500) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'UrgencyLevel')
+                            ALTER TABLE ProcessingLogs ADD UrgencyLevel NVARCHAR(50) NOT NULL CONSTRAINT DF_ProcessingLogs_UrgencyLevel DEFAULT 'THUONG';
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'ReceivedDate')
+                            ALTER TABLE ProcessingLogs ADD ReceivedDate DATETIMEOFFSET NOT NULL CONSTRAINT DF_ProcessingLogs_ReceivedDate DEFAULT SYSDATETIMEOFFSET();
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'SlaDeadline')
+                            ALTER TABLE ProcessingLogs ADD SlaDeadline DATETIMEOFFSET NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'SummaryDataJson')
+                            ALTER TABLE ProcessingLogs ADD SummaryDataJson NVARCHAR(MAX) NOT NULL CONSTRAINT DF_ProcessingLogs_SummaryData DEFAULT '';
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'SelectedOptionId')
+                            ALTER TABLE ProcessingLogs ADD SelectedOptionId NVARCHAR(50) NOT NULL CONSTRAINT DF_ProcessingLogs_SelectedOption DEFAULT '';
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'LegalBasesUsedJson')
+                            ALTER TABLE ProcessingLogs ADD LegalBasesUsedJson NVARCHAR(MAX) NOT NULL CONSTRAINT DF_ProcessingLogs_LegalBases DEFAULT '';
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'ResultDataJson')
+                            ALTER TABLE ProcessingLogs ADD ResultDataJson NVARCHAR(MAX) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'DraftContentHtml')
+                            ALTER TABLE ProcessingLogs ADD DraftContentHtml NVARCHAR(MAX) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'ExportedDocxPath')
+                            ALTER TABLE ProcessingLogs ADD ExportedDocxPath NVARCHAR(500) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'CurrentStatus')
+                            ALTER TABLE ProcessingLogs ADD CurrentStatus VARCHAR(30) NOT NULL CONSTRAINT DF_ProcessingLogs_CurrentStatus DEFAULT 'CHO_XU_LY';
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'SignedDate')
+                            ALTER TABLE ProcessingLogs ADD SignedDate DATETIMEOFFSET NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'RatingScore')
+                            ALTER TABLE ProcessingLogs ADD RatingScore INT NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'IsGoldSample')
+                            ALTER TABLE ProcessingLogs ADD IsGoldSample BIT NOT NULL CONSTRAINT DF_ProcessingLogs_IsGoldSample DEFAULT 0;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'CompletedAt')
+                            ALTER TABLE ProcessingLogs ADD CompletedAt DATETIMEOFFSET NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'TrackingId')
+                            ALTER TABLE ProcessingLogs ADD TrackingId NVARCHAR(100) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'ErrorMessage')
+                            ALTER TABLE ProcessingLogs ADD ErrorMessage NVARCHAR(MAX) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'ClientIp')
+                            ALTER TABLE ProcessingLogs ADD ClientIp NVARCHAR(100) NULL;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'ReprocessCount')
+                            ALTER TABLE ProcessingLogs ADD ReprocessCount INT NOT NULL CONSTRAINT DF_ProcessingLogs_ReprocessCount DEFAULT 0;
+
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'LastReprocessedAt')
+                            ALTER TABLE ProcessingLogs ADD LastReprocessedAt DATETIMEOFFSET NULL;
                     END
 
-                    -- Bảng LegalProposals
+                    -- ========================================================
+                    -- 7. BẢNG LegalProposals
+                    -- ========================================================
                     IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'LegalProposals')
                     BEGIN
                         CREATE TABLE [LegalProposals] (
@@ -183,70 +436,11 @@ namespace GovDoc.Infrastructure.Persistence
                         CREATE INDEX IX_LegalProposals_SubmittedBy ON [LegalProposals]([SubmittedBy]);
                         CREATE INDEX IX_LegalProposals_Status ON [LegalProposals]([Status]);
                     END
-
-                    -- Đồng bộ các cột bổ sung cho ProcessingLogs
-                    IF EXISTS (SELECT 1 FROM sys.tables WHERE name = 'ProcessingLogs')
+                    ELSE
                     BEGIN
-                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'SubjectTitle')
-                            ALTER TABLE ProcessingLogs ADD SubjectTitle NVARCHAR(500) NULL;
+                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('LegalProposals') AND name = 'Notes')
+                            ALTER TABLE LegalProposals ADD Notes NVARCHAR(MAX) NULL;
 
-                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'StoredFilePath')
-                            ALTER TABLE ProcessingLogs ADD StoredFilePath NVARCHAR(500) NULL;
-
-                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'ResultDataJson')
-                            ALTER TABLE ProcessingLogs ADD ResultDataJson NVARCHAR(MAX) NULL;
-
-                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'ReprocessCount')
-                            ALTER TABLE ProcessingLogs ADD ReprocessCount INT NOT NULL CONSTRAINT DF_ProcessingLogs_ReprocessCount DEFAULT 0;
-
-                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'LastReprocessedAt')
-                            ALTER TABLE ProcessingLogs ADD LastReprocessedAt DATETIMEOFFSET NULL;
-
-                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'ExportedDocxPath')
-                            ALTER TABLE ProcessingLogs ADD ExportedDocxPath NVARCHAR(500) NULL;
-
-                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'ClientIp')
-                            ALTER TABLE ProcessingLogs ADD ClientIp NVARCHAR(100) NULL;
-
-                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('ProcessingLogs') AND name = 'SlaDeadline')
-                            ALTER TABLE ProcessingLogs ADD SlaDeadline DATETIMEOFFSET NULL;
-                    END
-
-                    -- Đồng bộ các cột bổ sung cho LegalDocuments
-                    IF EXISTS (SELECT 1 FROM sys.tables WHERE name = 'LegalDocuments')
-                    BEGIN
-                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('LegalDocuments') AND name = 'IsDraft')
-                            ALTER TABLE LegalDocuments ADD IsDraft BIT NOT NULL CONSTRAINT DF_LegalDocuments_IsDraft DEFAULT 0;
-
-                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('LegalDocuments') AND name = 'FilePath')
-                            ALTER TABLE LegalDocuments ADD FilePath NVARCHAR(500) NULL;
-
-                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('LegalDocuments') AND name = 'CreatedBy')
-                            ALTER TABLE LegalDocuments ADD CreatedBy UNIQUEIDENTIFIER NULL;
-
-                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('LegalDocuments') AND name = 'UpdatedAt')
-                            ALTER TABLE LegalDocuments ADD UpdatedAt DATETIMEOFFSET NOT NULL CONSTRAINT DF_LegalDocuments_UpdatedAt DEFAULT SYSDATETIMEOFFSET();
-                    END
-
-                    -- Đồng bộ các cột bổ sung cho UserSessions
-                    IF EXISTS (SELECT 1 FROM sys.tables WHERE name = 'UserSessions')
-                    BEGIN
-                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('UserSessions') AND name = 'IsPersistent')
-                            ALTER TABLE UserSessions ADD IsPersistent BIT NOT NULL CONSTRAINT DF_UserSessions_IsPersistent DEFAULT 0;
-
-                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('UserSessions') AND name = 'ClientIp')
-                            ALTER TABLE UserSessions ADD ClientIp NVARCHAR(100) NULL;
-
-                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('UserSessions') AND name = 'UserAgent')
-                            ALTER TABLE UserSessions ADD UserAgent NVARCHAR(500) NULL;
-
-                        IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('UserSessions') AND name = 'IsRevoked')
-                            ALTER TABLE UserSessions ADD IsRevoked BIT NOT NULL CONSTRAINT DF_UserSessions_IsRevoked DEFAULT 0;
-                    END
-
-                    -- Đồng bộ các cột bổ sung cho LegalProposals
-                    IF EXISTS (SELECT 1 FROM sys.tables WHERE name = 'LegalProposals')
-                    BEGIN
                         IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('LegalProposals') AND name = 'AdminResponseNote')
                             ALTER TABLE LegalProposals ADD AdminResponseNote NVARCHAR(MAX) NULL;
 
@@ -256,11 +450,33 @@ namespace GovDoc.Infrastructure.Persistence
                         IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('LegalProposals') AND name = 'ReviewedAt')
                             ALTER TABLE LegalProposals ADD ReviewedAt DATETIMEOFFSET NULL;
                     END
+
+                    -- ========================================================
+                    -- 8. TỰ ĐỘNG BỔ SUNG CÁC INDEX QUAN TRỌNG NẾU THIẾU
+                    -- ========================================================
+                    IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Users_Username' AND object_id = OBJECT_ID('Users'))
+                        CREATE UNIQUE INDEX IX_Users_Username ON [Users]([Username]);
+
+                    IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_UserSessions_RefreshToken' AND object_id = OBJECT_ID('UserSessions'))
+                        CREATE UNIQUE INDEX IX_UserSessions_RefreshToken ON [UserSessions]([RefreshToken]);
+
+                    IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_ProcessingLogs_UserId' AND object_id = OBJECT_ID('ProcessingLogs'))
+                        CREATE INDEX IX_ProcessingLogs_UserId ON [ProcessingLogs]([UserId]);
+
+                    IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_ProcessingLogs_CreatedAt' AND object_id = OBJECT_ID('ProcessingLogs'))
+                        CREATE INDEX IX_ProcessingLogs_CreatedAt ON [ProcessingLogs]([CreatedAt]);
+
+                    IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_ProcessingLogs_Status' AND object_id = OBJECT_ID('ProcessingLogs'))
+                        CREATE INDEX IX_ProcessingLogs_Status ON [ProcessingLogs]([CurrentStatus]);
+
+                    IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_LegalDocuments_CodeNumber' AND object_id = OBJECT_ID('LegalDocuments'))
+                        CREATE INDEX IX_LegalDocuments_CodeNumber ON [LegalDocuments]([CodeNumber]);
                 ");
             }
-            catch
+            catch (Exception ex)
             {
-                // Bỏ qua nếu môi trường in-memory hoặc không hỗ trợ ALTER TABLE
+                // Bỏ qua nếu môi trường in-memory SQLite kiểm thử đơn vị, hoặc ghi nhận log
+                System.Diagnostics.Debug.WriteLine($"[SchemaSync Notice] {ex.Message}");
             }
 
             // 3. Khởi tạo tài khoản Quản trị viên (Admin) mặc định
@@ -274,30 +490,11 @@ namespace GovDoc.Infrastructure.Persistence
                     PasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin@123"),
                     FullName = "Nguyễn Văn Hùng (Quản trị viên)",
                     Role = UserRole.Admin,
-                    Department = "Sở Tư pháp / Phòng Pháp chế UBND Tỉnh",
+                    Department = FieldCategory.TuPhapPhapChe,
                     IsActive = true
                 };
                 await context.Users.AddAsync(adminUser);
                 await context.SaveChangesAsync();
-            }
-            else
-            {
-                // Đảm bảo quyền Admin và trạng thái hoạt động luôn hợp lệ
-                bool needSave = false;
-                if (adminUser.Role != UserRole.Admin)
-                {
-                    adminUser.Role = UserRole.Admin;
-                    needSave = true;
-                }
-                if (!adminUser.IsActive)
-                {
-                    adminUser.IsActive = true;
-                    needSave = true;
-                }
-                if (needSave)
-                {
-                    await context.SaveChangesAsync();
-                }
             }
 
             // 4. Khởi tạo tài khoản Chuyên viên mặc định
@@ -311,14 +508,14 @@ namespace GovDoc.Infrastructure.Persistence
                     PasswordHash = BCrypt.Net.BCrypt.HashPassword("User@123"),
                     FullName = "Trần Thị Mai (Chuyên viên)",
                     Role = UserRole.User,
-                    Department = "Văn phòng UBND Tỉnh / Bộ phận Tổng hợp",
+                    Department = FieldCategory.QuanTriVanPhong,
                     IsActive = true
                 };
                 await context.Users.AddAsync(specialistUser);
                 await context.SaveChangesAsync();
             }
 
-            // 2. Seed Legal Documents & Clauses
+            // 5. Seed Legal Documents & Clauses (Nếu chưa có dữ liệu)
             if (!await context.LegalDocuments.AnyAsync())
             {
                 var adminId = Guid.Parse("11111111-1111-1111-1111-111111111111");
@@ -332,6 +529,9 @@ namespace GovDoc.Infrastructure.Persistence
                     DocType = LegalDocType.Law,
                     HierarchyRank = 90,
                     Issuer = "Quốc hội",
+                    IssuerAgency = "Quốc hội Nước CHXHCN Việt Nam",
+                    DocumentScope = DocumentScope.QPPL,
+                    FieldCategory = FieldCategory.TuPhapPhapChe,
                     IssuedDate = new DateTime(2015, 6, 22),
                     EffectiveDate = new DateTime(2016, 7, 1),
                     Status = LegalStatus.Active,
@@ -348,6 +548,9 @@ namespace GovDoc.Infrastructure.Persistence
                     DocType = LegalDocType.Decree,
                     HierarchyRank = 70,
                     Issuer = "Chính phủ",
+                    IssuerAgency = "Chính phủ Nước CHXHCN Việt Nam",
+                    DocumentScope = DocumentScope.QPPL,
+                    FieldCategory = FieldCategory.QuanTriVanPhong,
                     IssuedDate = new DateTime(2020, 3, 5),
                     EffectiveDate = new DateTime(2020, 3, 5),
                     Status = LegalStatus.Active,
@@ -364,6 +567,9 @@ namespace GovDoc.Infrastructure.Persistence
                     DocType = LegalDocType.Decree,
                     HierarchyRank = 70,
                     Issuer = "Chính phủ",
+                    IssuerAgency = "Chính phủ Nước CHXHCN Việt Nam",
+                    DocumentScope = DocumentScope.QPPL,
+                    FieldCategory = FieldCategory.KinhTeTaiChinh,
                     IssuedDate = new DateTime(2026, 1, 15),
                     EffectiveDate = new DateTime(2026, 3, 1),
                     Status = LegalStatus.Active,
@@ -380,6 +586,9 @@ namespace GovDoc.Infrastructure.Persistence
                     DocType = LegalDocType.Decree,
                     HierarchyRank = 70,
                     Issuer = "Chính phủ",
+                    IssuerAgency = "Chính phủ Nước CHXHCN Việt Nam",
+                    DocumentScope = DocumentScope.QPPL,
+                    FieldCategory = FieldCategory.KinhTeTaiChinh,
                     IssuedDate = new DateTime(2021, 3, 26),
                     EffectiveDate = new DateTime(2021, 3, 26),
                     ExpiredDate = new DateTime(2026, 2, 28),
@@ -397,6 +606,9 @@ namespace GovDoc.Infrastructure.Persistence
                     DocType = LegalDocType.Decree,
                     HierarchyRank = 70,
                     Issuer = "Chính phủ",
+                    IssuerAgency = "Chính phủ Nước CHXHCN Việt Nam",
+                    DocumentScope = DocumentScope.QPPL,
+                    FieldCategory = FieldCategory.DatDaiXayDung,
                     IssuedDate = new DateTime(2021, 3, 31),
                     EffectiveDate = new DateTime(2021, 5, 15),
                     Status = LegalStatus.Active,
@@ -404,23 +616,45 @@ namespace GovDoc.Infrastructure.Persistence
                     CreatedBy = adminId
                 };
 
-                // Doc 6: Nghị định Dự thảo (IsDraft = true - Khóa cứng không dùng làm căn cứ)
-                var draftDoc = new LegalDocument
+                // Doc 6: Quyết định Hành chính cá biệt của UBND Tỉnh (HANH_CHINH)
+                var adminDecisionDoc = new LegalDocument
                 {
-                    Id = Guid.Parse("aaaaaaaa-1111-0000-0000-000000000006"),
-                    CodeNumber = "DT-ND-CP/2026",
-                    Title = "Dự thảo Nghị định sửa đổi cơ chế bồi thường hỗ trợ tái định cư dự án công",
-                    DocType = LegalDocType.Decree,
-                    HierarchyRank = 70,
-                    Issuer = "Chính phủ",
-                    IssuedDate = new DateTime(2026, 8, 1),
-                    EffectiveDate = new DateTime(2027, 1, 1),
-                    Status = LegalStatus.Draft,
-                    IsDraft = true,
+                    Id = Guid.Parse("aaaaaaaa-1111-0000-0000-000000000007"),
+                    CodeNumber = "1825/QĐ-UBND",
+                    Title = "Quyết định về việc phê duyệt quy trình nội bộ trong giải quyết thủ tục hành chính lĩnh vực đất đai và xây dựng",
+                    DocType = LegalDocType.DecisionProv,
+                    HierarchyRank = 40,
+                    Issuer = "Ủy ban nhân dân tỉnh",
+                    IssuerAgency = "Ủy ban nhân dân tỉnh Bình Dương",
+                    DocumentScope = DocumentScope.HanhChinh,
+                    FieldCategory = FieldCategory.DatDaiXayDung,
+                    IssuedDate = new DateTime(2025, 7, 20),
+                    EffectiveDate = new DateTime(2025, 7, 20),
+                    Status = LegalStatus.Active,
+                    IsDraft = false,
                     CreatedBy = adminId
                 };
 
-                await context.LegalDocuments.AddRangeAsync(lawDoc, decree30Doc, decree123Doc, decree31Doc, decree45Doc, draftDoc);
+                // Doc 7: Công văn Hướng dẫn nghiệp vụ (HUONG_DAN_NGHIEP_VU)
+                var guidanceDoc = new LegalDocument
+                {
+                    Id = Guid.Parse("aaaaaaaa-1111-0000-0000-000000000008"),
+                    CodeNumber = "540/HD-STP",
+                    Title = "Hướng dẫn nghiệp vụ về rà soát, hệ thống hóa văn bản và kiểm tra thể thức văn bản hành chính theo Nghị định 30/2020/NĐ-CP",
+                    DocType = LegalDocType.OfficialDispatch,
+                    HierarchyRank = 30,
+                    Issuer = "Sở Tư pháp",
+                    IssuerAgency = "Sở Tư pháp tỉnh Bình Dương",
+                    DocumentScope = DocumentScope.HuongDanNghiepVu,
+                    FieldCategory = FieldCategory.TuPhapPhapChe,
+                    IssuedDate = new DateTime(2025, 8, 10),
+                    EffectiveDate = new DateTime(2025, 8, 10),
+                    Status = LegalStatus.Active,
+                    IsDraft = false,
+                    CreatedBy = adminId
+                };
+
+                await context.LegalDocuments.AddRangeAsync(lawDoc, decree30Doc, decree123Doc, decree31Doc, decree45Doc, adminDecisionDoc, guidanceDoc);
 
                 // Clauses
                 var clauses = new[]
@@ -443,7 +677,7 @@ namespace GovDoc.Infrastructure.Persistence
                         DocId = decree30Doc.Id,
                         ArticleNumber = "Điều 9",
                         ClauseNumber = "Khoản 1",
-                        RawContent = "Kỹ thuật trình bày văn bản hành chính: Khổ giấy A4 (210 x 297 mm), căn lề trang: Lề trên 20-25 mm, lề dưới 20-25 mm, lề trái 30-35 mm, lề phải 15-20 mm. Phông chữ tiếng Việt Unicode Times New Roman.",
+                        RawContent = "Kỹ thuật trình bày văn bản hành chính: Khổ giấy A4 (210 x 297 mm), căn lề trang: Lề trên 20-25 mm, lề dưới 20-25 mm, lề trái 30-35 mm, lề phải 15-20 mm. Phông chữ tiếng Việt Unicode Times New Roman hoặc font không chân tương thích.",
                         Status = LegalStatus.Active
                     },
 
@@ -456,26 +690,6 @@ namespace GovDoc.Infrastructure.Persistence
                         ClauseNumber = "Khoản 2",
                         RawContent = "Trường hợp dự án đầu tư cụm công nghiệp chậm tiến độ do nguyên nhân khách quan trong công tác giải phóng mặt bằng, bồi thường tái định cư, Ủy ban nhân dân cấp tỉnh xem xét, quyết định gia hạn tiến độ thực hiện dự án tối đa không quá 12 tháng trên cơ sở báo cáo thẩm định của cơ quan chuyên môn về đầu tư.",
                         Status = LegalStatus.Active
-                    },
-                    new LegalClauseNode
-                    {
-                        Id = Guid.NewGuid(),
-                        DocId = decree123Doc.Id,
-                        ArticleNumber = "Điều 15",
-                        ClauseNumber = "Khoản 1",
-                        RawContent = "Hồ sơ, trình tự điều chỉnh tiến độ dự án đầu tư bao gồm văn bản đề nghị của nhà đầu tư, báo cáo tình hình triển khai và văn bản xác nhận của cơ quan giải phóng mặt bằng cấp huyện.",
-                        Status = LegalStatus.Active
-                    },
-
-                    // Decree 31 (Expired)
-                    new LegalClauseNode
-                    {
-                        Id = Guid.NewGuid(),
-                        DocId = decree31Doc.Id,
-                        ArticleNumber = "Điều 12",
-                        ClauseNumber = "Khoản 1",
-                        RawContent = "Quy định cũ về điều chỉnh tiến độ đầu tư theo Nghị định 31/2021/NĐ-CP (Đã bị bãi bỏ bởi Nghị định 123/2026/NĐ-CP).",
-                        Status = LegalStatus.Expired
                     },
 
                     // Decree 45

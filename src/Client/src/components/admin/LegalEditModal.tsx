@@ -9,7 +9,6 @@ import {
   FileText, 
   Settings, 
   ListPlus,
-  Sparkles,
   Info
 } from 'lucide-react';
 import { LegalDocumentItem } from '../../types';
@@ -289,7 +288,7 @@ export const LegalEditModal: React.FC<LegalEditModalProps> = ({
                 : 'bg-white text-gov-text border border-gov-border hover:bg-gray-100'
             }`}
           >
-            <Sparkles className="w-3.5 h-3.5 text-gov-gold" />
+            <FileText className="w-3.5 h-3.5 text-gov-gold" />
             <span>3. Dán nhanh toàn văn</span>
           </button>
         </div>
@@ -547,7 +546,7 @@ Nghị định này áp dụng đối với cơ quan nhà nước, nhà đầu t
                     disabled={!bulkText.trim()}
                     className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gov-gold hover:bg-amber-500 text-gov-text font-bold text-xs transition-colors shadow-sm disabled:opacity-50"
                   >
-                    <Sparkles className="w-4 h-4" />
+                    <FileText className="w-4 h-4" />
                     <span>Tự động phân tách thành các Điều khoản</span>
                   </button>
                 </div>

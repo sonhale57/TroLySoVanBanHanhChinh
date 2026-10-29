@@ -11,8 +11,10 @@ import {
   Send,
   Loader2,
   ExternalLink,
-  MessageSquareQuote
+  MessageSquareQuote,
+  Trash2
 } from 'lucide-react';
+import { SmartDeleteConfirmModal } from '../common/SmartDeleteConfirmModal';
 import { LegalProposalItem } from '../../types';
 import { api } from '../../services/api';
 
@@ -31,6 +33,7 @@ export const ProposalList: React.FC<ProposalListProps> = ({ onRefreshStats }) =>
   const [actionType, setActionType] = useState<'APPROVED' | 'REJECTED'>('APPROVED');
   const [adminNote, setAdminNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [deleteTargetProposal, setDeleteTargetProposal] = useState<LegalProposalItem | null>(null);
 
   const fetchProposals = async () => {
     try {
@@ -49,6 +52,26 @@ export const ProposalList: React.FC<ProposalListProps> = ({ onRefreshStats }) =>
   useEffect(() => {
     fetchProposals();
   }, []);
+
+  const handleExecuteDeleteProposal = async (forceCascade: boolean) => {
+    if (!deleteTargetProposal) return { success: false };
+    try {
+      await api.deleteProposal(deleteTargetProposal.id, forceCascade);
+      setDeleteTargetProposal(null);
+      await fetchProposals();
+      return { success: true };
+    } catch (err: any) {
+      if (err?.response?.status === 409 && err?.response?.data?.requiresCascadeConfirmation) {
+        return {
+          success: false,
+          requiresCascade: true,
+          dependencies: err.response.data.dependencies,
+          message: err.response.data.message,
+        };
+      }
+      throw err;
+    }
+  };
 
   const handleOpenReview = (item: LegalProposalItem, type: 'APPROVED' | 'REJECTED') => {
     setReviewingItem(item);
@@ -253,26 +276,36 @@ export const ProposalList: React.FC<ProposalListProps> = ({ onRefreshStats }) =>
                   </div>
 
                   {/* Actions for Admin */}
-                  {item.status === 'PENDING' && (
-                    <div className="flex md:flex-col items-center gap-2 flex-shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => handleOpenReview(item, 'APPROVED')}
-                        className="px-3 py-1.5 rounded-lg bg-gov-active hover:bg-green-700 text-white text-xs font-bold shadow-sm flex items-center gap-1.5 transition-colors"
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        Chấp thuận
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleOpenReview(item, 'REJECTED')}
-                        className="px-3 py-1.5 rounded-lg bg-gov-danger hover:bg-red-700 text-white text-xs font-bold shadow-sm flex items-center gap-1.5 transition-colors"
-                      >
-                        <XCircle className="w-3.5 h-3.5" />
-                        Từ chối
-                      </button>
-                    </div>
-                  )}
+                  <div className="flex md:flex-col items-center gap-2 flex-shrink-0">
+                    {item.status === 'PENDING' && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenReview(item, 'APPROVED')}
+                          className="px-3 py-1.5 rounded-lg bg-gov-active hover:bg-green-700 text-white text-xs font-bold shadow-sm flex items-center gap-1.5 transition-colors"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          Chấp thuận
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenReview(item, 'REJECTED')}
+                          className="px-3 py-1.5 rounded-lg bg-gov-danger hover:bg-red-700 text-white text-xs font-bold shadow-sm flex items-center gap-1.5 transition-colors"
+                        >
+                          <XCircle className="w-3.5 h-3.5" />
+                          Từ chối
+                        </button>
+                      </>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setDeleteTargetProposal(item)}
+                      className="p-1.5 rounded-lg border border-gov-border text-gov-danger hover:bg-red-50 transition-colors"
+                      title="Xóa đề xuất"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -365,6 +398,15 @@ export const ProposalList: React.FC<ProposalListProps> = ({ onRefreshStats }) =>
           </div>
         </div>
       )}
+      {/* Smart Delete Modal cho Đề xuất */}
+      <SmartDeleteConfirmModal
+        isOpen={!!deleteTargetProposal}
+        onClose={() => setDeleteTargetProposal(null)}
+        onConfirm={handleExecuteDeleteProposal}
+        title="Xác nhận xóa đề xuất pháp luật"
+        itemName={deleteTargetProposal ? deleteTargetProposal.title : ''}
+        itemTypeLabel="Đề xuất văn bản"
+      />
     </div>
   );
 };

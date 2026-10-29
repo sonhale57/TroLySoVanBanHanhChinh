@@ -16,6 +16,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container
 builder.Services.AddControllers();
+builder.Services.AddHttpClient();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -104,6 +105,12 @@ builder.Services.AddSingleton<IAdministrativeAppraisalEngine, AdministrativeAppr
 builder.Services.AddSingleton<IFileStorageService, LocalFileStorageService>();
 builder.Services.AddScoped<ILegalSearchEngine, LegalSearchEngine>();
 builder.Services.AddScoped<ITokenService, GovDoc.Infrastructure.Identity.TokenService>();
+builder.Services.AddSingleton<IAesEncryptionService, GovDoc.Infrastructure.Identity.AesEncryptionService>();
+builder.Services.AddSingleton<IDepartmentSkillService, DepartmentSkillService>();
+builder.Services.AddSingleton<IExcelExportService, Decree30ExcelExportService>();
+builder.Services.AddSingleton<IBackgroundTaskQueue, BackgroundTaskQueue>();
+builder.Services.AddSingleton<INotificationService, GovDoc.Infrastructure.Services.NotificationService>();
+builder.Services.AddHostedService<DocumentQueueBackgroundService>();
 
 // Configure CORS for Vite React client
 builder.Services.AddCors(options =>
@@ -136,6 +143,21 @@ app.UseSwaggerUI(c =>
     c.RoutePrefix = "swagger";
 });
 
+// Xử lý tất cả các request OPTIONS (kể cả không có Origin header) trả về 200 OK với đầy đủ methods
+app.Use(async (context, next) =>
+{
+    if (HttpMethods.IsOptions(context.Request.Method))
+    {
+        context.Response.Headers.Append("Access-Control-Allow-Origin", "*");
+        context.Response.Headers.Append("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
+        context.Response.Headers.Append("Access-Control-Allow-Headers", "*");
+        context.Response.StatusCode = StatusCodes.Status200OK;
+        return;
+    }
+    await next();
+});
+
+app.UseRouting();
 app.UseCors("AllowAll");
 
 app.UseAuthentication();
